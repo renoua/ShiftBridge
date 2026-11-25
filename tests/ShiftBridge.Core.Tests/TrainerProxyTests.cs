@@ -302,6 +302,55 @@ public class TrainerProxyTests
     }
 
     [Fact]
+    public async Task When_the_app_handles_gears_shifts_go_to_the_app_and_the_trainer_is_relayed_unchanged()
+    {
+        await using var trainer = new FakeTrainer();
+        var config = new ShiftBridge.Core.Config.AppConfig { AppHandlesShifting = true, LastGear = 22 }; // rapport dur : ShiftBridge réécrirait la pente
+        await using var bridge = new BridgeService(config);
+        var obcServer = new ShiftBridge.Platform.Obc.ObcTcpServer("AppShifts");
+        await bridge.AddTransportAsync(obcServer);
+        await bridge.StartTrainerProxyAsync(new TrainerEndpoint.DirCon("127.0.0.1", trainer.Port));
+
+        await using var app = new DirConClient();
+        await app.ConnectAsync("127.0.0.1", bridge.TrainerProxyPort);
+        await trainer.PushBikeDataAsync(8.0);
+        await WaitUntil(() => bridge.TrainerSpeedMs > 7);
+        await app.WriteAsync(FtmsCodec.ControlPoint, SimFlat);
+        await WaitUntil(() => trainer.ControlPointWrites.Count == 1);
+        Assert.Equal(SimFlat, trainer.ControlPointWrites[0]);           // relais pur
+
+        using var obc = new TcpClient();
+        await obc.ConnectAsync("127.0.0.1", obcServer.Port);
+        var s = obc.GetStream();
+        await s.ReadExactlyAsync(new byte[3]);
+
+        // Vitesse + : l'appli reçoit ShiftUp (appui puis relâchement), le trainer ne reçoit rien de plus, pas de « Gear Set ».
+        bridge.InjectEvents([new ShiftBridge.Core.Input.ButtonEvent(ShiftBridge.Core.Input.PhysicalButton.ClickPlus, true)]);
+        bridge.InjectEvents([new ShiftBridge.Core.Input.ButtonEvent(ShiftBridge.Core.Input.PhysicalButton.ClickPlus, false)]);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        var received = new List<(byte Id, byte State)>();
+        while (!received.Contains(((byte)ShiftBridge.Core.Obc.ObcButtonId.ShiftUp, (byte)0)))
+        {
+            var msg = new byte[3];
+            await s.ReadExactlyAsync(msg, cts.Token);
+            received.Add((msg[1], msg[2]));
+        }
+        Assert.Contains(((byte)ShiftBridge.Core.Obc.ObcButtonId.ShiftUp, (byte)1), received);
+        Assert.DoesNotContain(received, m => m.Id == (byte)ShiftBridge.Core.Obc.ObcButtonId.GearSet);
+        await Task.Delay(200);
+        Assert.Single(trainer.ControlPointWrites);
+
+        // Retour à ShiftBridge à chaud : la pente est de nouveau réécrite pour le rapport courant…
+        await bridge.SetAppHandlesShiftingAsync(false);
+        await WaitUntil(() => trainer.ControlPointWrites.Count == 2);
+        Assert.NotEqual(SimFlat, trainer.ControlPointWrites[1]);
+        // … puis rendue à l'appli : le trainer retrouve la simulation brute.
+        await bridge.SetAppHandlesShiftingAsync(true);
+        await WaitUntil(() => trainer.ControlPointWrites.Count == 3);
+        Assert.Equal(SimFlat, trainer.ControlPointWrites[2]);
+    }
+
+    [Fact]
     public async Task Gear_report_is_sent_on_app_info_and_released_when_the_proxy_stops_and_not_when_disabled()
     {
         await using var trainer = new FakeTrainer();

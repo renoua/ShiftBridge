@@ -15,7 +15,9 @@ public readonly record struct ZwiftDeviceType(ZwiftModel Model, ZwiftSide Side, 
         {
             0x02 => new(ZwiftModel.Play, ZwiftSide.Right, code),
             0x03 => new(ZwiftModel.Play, ZwiftSide.Left, code),
-            0x0E => new(ZwiftModel.Play, ZwiftSide.Left, code), // Play firmware 2 : côté à confirmer
+            // Play firmware récent : le code ne dit pas le côté (les deux manettes peuvent l'annoncer). Côté inconnu :
+            // l'analyse de la trame lit le champ 1 (0 = droite), sinon les deux manettes passeraient pour la gauche.
+            0x0E => new(ZwiftModel.Play, ZwiftSide.None, code),
             0x07 => new(ZwiftModel.Ride, ZwiftSide.Right, code),
             0x08 => new(ZwiftModel.Ride, ZwiftSide.Left, code),
             0x09 => new(ZwiftModel.Click, ZwiftSide.None, code),

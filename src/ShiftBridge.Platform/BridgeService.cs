@@ -588,7 +588,7 @@ public sealed class BridgeService : IAsyncDisposable
     /// </summary>
     private void ReportGear(bool force = false)
     {
-        if (!Config.ReportGearToApp || _proxy is null) return;
+        if (!Config.ReportGearToApp || !ProxyShifts) return;
         if (_mapping.SupportedActions is { Count: > 0 } supported && !supported.Contains(ObcButtonId.GearSet)) return;
 
         int state = Math.Clamp(Gear.Gear, 1, Gear.GearCount) + 1;
@@ -673,6 +673,35 @@ public sealed class BridgeService : IAsyncDisposable
         Log?.Invoke($"Nombre de vitesses : {count} (vitesse {Gear.Gear}/{count}, rapport {GearRatio:0.00}).");
         GearChanged?.Invoke();
         OnGearChanged();
+    }
+
+    /// <summary>
+    /// ShiftBridge applique lui-même les vitesses au trainer (proxy actif, option « l'appli gère les vitesses » décochée).
+    /// Sinon + et − partent à l'appli par OpenBikeControl, comme sans proxy.
+    /// </summary>
+    private bool ProxyShifts => _proxy is not null && !Config.AppHandlesShifting;
+
+    public bool AppHandlesShifting => Config.AppHandlesShifting;
+
+    /// <summary>
+    /// Choisit qui gère les vitesses virtuelles : ShiftBridge (proxy trainer, défaut) ou l'appli d'entraînement. Appliqué à
+    /// chaud : le proxy devient un relais pur (ou reprend le virtual shifting) sans couper la connexion de l'appli.
+    /// </summary>
+    public async Task SetAppHandlesShiftingAsync(bool value)
+    {
+        if (Config.AppHandlesShifting == value) return;
+        lock (_dispatchLock)
+        {
+            Config.AppHandlesShifting = value;
+            _mapping.AlwaysAllowed = _proxy is not null && !value ? ProxyShiftActions : NoActions;
+        }
+        if (value) ReleaseReportedGear(); // l'appli a ses propres vitesses : ne plus lui imposer celle de ShiftBridge
+        if (_proxy is { } p) await p.SetShiftingEnabledAsync(!value, Config.NativeZwiftMode);
+        if (!value) ReportGear(force: true);
+        Log?.Invoke(value
+            ? "Vitesses gérées par l'appli : + et − lui sont transmis, le trainer est relayé sans modification."
+            : "Vitesses gérées par ShiftBridge (virtual shifting du proxy trainer).");
+        TrainerChanged?.Invoke();
     }
 
     /// <summary>Le trainer applique lui-même le rapport (protocole natif Zwift), au lieu de la mise à l'échelle FTMS.</summary>
@@ -905,6 +934,7 @@ public sealed class BridgeService : IAsyncDisposable
 
             proxy = new DirConTrainerProxy(link, _vsModel, txt, policy: policy, trainerLabel: label, transportLabel: transport)
             {
+                Enabled = !Config.AppHandlesShifting, // l'appli gère les vitesses : relais pur
                 NativeZwiftMode = Config.NativeZwiftMode,
                 RiderWeightKg = Config.RiderWeightKg,
                 BikeWeightKg = Config.BikeWeightKg,
@@ -921,7 +951,7 @@ public sealed class BridgeService : IAsyncDisposable
             _proxy = proxy;
             _proxyEndpoint = endpoint;
             // ShiftBridge applique lui-même les vitesses : l'appli ne doit pas pouvoir les filtrer (voir MappingEngine.AlwaysAllowed).
-            lock (_dispatchLock) _mapping.AlwaysAllowed = ProxyShiftActions;
+            lock (_dispatchLock) _mapping.AlwaysAllowed = Config.AppHandlesShifting ? NoActions : ProxyShiftActions;
             ReportGear(force: true);
             Log?.Invoke($"Proxy trainer actif ({transport}) : appairez votre appli au trainer « ShiftBridge Trainer » (port {proxy.Port}).");
         }
@@ -983,7 +1013,7 @@ public sealed class BridgeService : IAsyncDisposable
             // Avec le proxy trainer actif, c'est lui qui applique les vitesses au trainer : on ne les envoie PAS à l'appli,
             // sinon elles seraient comptées deux fois (virtual shifting du proxy + celui de l'appli).
             // Les actions internes (vitesse centrale, aller au rapport) ne sortent jamais de ShiftBridge.
-            bool proxyShifts = _proxy is not null;
+            bool proxyShifts = ProxyShifts;
             toSend = changes.Where(c => !ObcButtonCatalog.IsInternal(c.Id)
                                         && !(proxyShifts && c.Id is ObcButtonId.ShiftUp or ObcButtonId.ShiftDown)).ToList();
             // File unique, remplie sous le même verrou que la traduction : l'ordre appui/relâchement est strictement conservé
@@ -1014,7 +1044,7 @@ public sealed class BridgeService : IAsyncDisposable
             ApplyGearAction(id, GearParamFor(events, id), source);
         StartRepeaters(events, changes, source);
 
-        if (_proxy is not null && changes.Any(c => c.Id is ObcButtonId.ShiftUp or ObcButtonId.ShiftDown or ObcButtonId.ShiftUpBy or ObcButtonId.ShiftDownBy))
+        if (ProxyShifts && changes.Any(c => c.Id is ObcButtonId.ShiftUp or ObcButtonId.ShiftDown or ObcButtonId.ShiftUpBy or ObcButtonId.ShiftDownBy))
             Log?.Invoke("Vitesse appliquée par le proxy trainer (non envoyée à l'appli).");
     }
 
@@ -1030,7 +1060,7 @@ public sealed class BridgeService : IAsyncDisposable
         lock (_dispatchLock)
         {
             bool appSupportsIt = _mapping.SupportedActions is not { Count: > 0 } supported || supported.Contains(action);
-            if (_proxy is not null || !appSupportsIt) return;
+            if (ProxyShifts || !appSupportsIt) return;
             // Sous le même verrou que le flux des touches : l'ordre appui/relâchement reste strict.
             foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)1), (action, (byte)0)])) _outbox.Writer.TryWrite(m);
         }
@@ -1042,6 +1072,7 @@ public sealed class BridgeService : IAsyncDisposable
         GearChange change;
         int before, after;
         lock (_gearLock) { before = Gear.Gear; change = Gear.Apply(id, target); after = Gear.Gear; }
+        Log?.Invoke($"Vitesse : {id} {before}→{after} ({change})");
         LastGearChange = change;
         if (change != GearChange.None) GearChanged?.Invoke();
         if (change == GearChange.Changed) OnGearChanged();
@@ -1068,7 +1099,7 @@ public sealed class BridgeService : IAsyncDisposable
                 lock (_dispatchLock)
                 {
                     bool appSupportsIt = _mapping.SupportedActions is not { Count: > 0 } supported || supported.Contains(action);
-                    if (_proxy is not null || !appSupportsIt) return; // le proxy a déjà appliqué le rapport au trainer
+                    if (ProxyShifts || !appSupportsIt) return; // le proxy a déjà appliqué le rapport au trainer
                     // Appui et relâchement dans deux messages distincts : l'appli voit un vrai appui à chaque fois.
                     foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)1)])) _outbox.Writer.TryWrite(m);
                     foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)0)])) _outbox.Writer.TryWrite(m);
@@ -1146,7 +1177,9 @@ public sealed class BridgeService : IAsyncDisposable
     private bool RepeatShift(ObcButtonId action, object? source)
     {
         GearChange change;
-        lock (_gearLock) change = Gear.Apply(action);
+        int before, after;
+        lock (_gearLock) { before = Gear.Gear; change = Gear.Apply(action); after = Gear.Gear; }
+        Log?.Invoke($"Vitesse (répétition) : {action} {before}→{after} ({change})");
         LastGearChange = change;
         if (change != GearChange.None) GearChanged?.Invoke();
         if (change == GearChange.Changed) OnGearChanged();
@@ -1156,7 +1189,7 @@ public sealed class BridgeService : IAsyncDisposable
         // Sans proxy, l'appli applique elle-même les vitesses : elle doit voir un nouvel appui. La touche est toujours tenue
         // (état 1) : on envoie donc relâché puis appuyé, et le vrai relâchement partira avec la touche.
         bool appSupportsIt = _mapping.SupportedActions is not { Count: > 0 } supported || supported.Contains(action);
-        if (_proxy is null && appSupportsIt)
+        if (!ProxyShifts && appSupportsIt)
         {
             foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)0)])) _outbox.Writer.TryWrite(m);
             foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)1)])) _outbox.Writer.TryWrite(m);

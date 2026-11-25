@@ -148,6 +148,12 @@
                     <Border Style="{StaticResource Card}">
                         <VerticalStackLayout Spacing="10">
                             <HorizontalStackLayout Spacing="10">
+                                <Switch IsToggled="{Binding AppHandlesShifting}" VerticalOptions="Center" />
+                                <Label Text="{x:Static loc:Strings.Trainer_AppShifts}" VerticalOptions="Center" />
+                                <ctl:InfoButton Heading="{x:Static loc:Strings.Trainer_AppShifts}" Message="{x:Static loc:Strings.Trainer_AppShiftsTip}" />
+                            </HorizontalStackLayout>
+
+                            <HorizontalStackLayout Spacing="10">
                                 <Switch IsToggled="{Binding NativeZwiftMode}" VerticalOptions="Center" />
                                 <Label Text="{x:Static loc:Strings.Trainer_Native}" VerticalOptions="Center" />
                                 <ctl:InfoButton Heading="{x:Static loc:Strings.Trainer_Native}" Message="{x:Static loc:Strings.Trainer_NativeTip}" />

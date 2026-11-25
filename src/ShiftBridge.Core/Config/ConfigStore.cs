@@ -84,6 +84,11 @@ public sealed class AppConfig
     /// mise à l'échelle FTMS sinon.
     /// </summary>
     public bool NativeZwiftMode { get; set; } = true;
+    /// <summary>
+    /// Vrai : l'appli d'entraînement gère ses propres vitesses virtuelles (le proxy relaie le trainer sans rien modifier, + et −
+    /// lui sont transmis). Faux (défaut) : ShiftBridge applique les vitesses au trainer.
+    /// </summary>
+    public bool AppHandlesShifting { get; set; }
     /// <summary>Poids envoyés au trainer en mode natif (il s'en sert pour sa physique ; l'appli ne les transmet pas par FTMS).</summary>
     public double RiderWeightKg { get; set; } = 75;
     public double BikeWeightKg { get; set; } = 9;

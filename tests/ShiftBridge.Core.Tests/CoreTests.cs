@@ -80,6 +80,17 @@ public class ZwiftParserTests
     }
 
     [Fact]
+    public void Play_0x0E_side_comes_from_the_frame()
+    {
+        // Les deux Play d'un firmware récent peuvent annoncer 0x0E : le côté se lit alors dans le champ 1 de la trame.
+        var t = ZwiftDeviceType.FromManufacturerData([0x0E]);
+        Assert.Equal(ZwiftModel.Play, t.Model);
+        Assert.Equal(ZwiftSide.None, t.Side);
+        Assert.Equal([PhysicalButton.RightShiftUp], Pressed(t, 0x07, 0x08, 0x00, 0x30, 0x00));
+        Assert.Equal([PhysicalButton.LeftShiftDown], Pressed(t, 0x07, 0x08, 0x01, 0x30, 0x00));
+    }
+
+    [Fact]
     public void Click_plus_pressed()
     {
         var p = Pressed(new(ZwiftModel.Click, ZwiftSide.None, 0x09), 0x37, 0x08, 0x00, 0x10, 0x01);

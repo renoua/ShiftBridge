@@ -250,6 +250,8 @@
   <data name="Mode_Stopped" xml:space="preserve"><value>Virtual shifting stopped: gear not applied</value></data>
   <data name="Mode_ByTrainer" xml:space="preserve"><value>Applied by the trainer</value></data>
   <data name="Mode_ByApp" xml:space="preserve"><value>Grade adjusted by ShiftBridge</value></data>
+  <data name="Mode_AppShifts" xml:space="preserve"><value>Gears handled by the app: trainer relayed unchanged</value></data>
+  <data name="Overlay_AppShifts" xml:space="preserve"><value>app</value></data>
   <data name="Dev_Disconnect" xml:space="preserve"><value>Disconnect</value></data>
   <data name="Dev_Connect" xml:space="preserve"><value>Connect</value></data>
   <data name="Dev_NotConnected" xml:space="preserve"><value>Not connected</value></data>
@@ -540,6 +542,8 @@
   <data name="Trainer_ReportGearTip" xml:space="preserve"><value>Experimental (OpenBikeControl “Gear Set”). An app may ignore it, or apply it to its own simulation: if resistance doubles, turn this option off and keep the overlay display.</value></data>
   <data name="Trainer_SlopeOnly" xml:space="preserve"><value>Slope only</value></data>
   <data name="Trainer_SlopeOnlyTip" xml:space="preserve"><value>Turn on if your trainer ignores rolling resistance and drag in the simulation.</value></data>
+  <data name="Trainer_AppShifts" xml:space="preserve"><value>Let the app handle gears</value></data>
+  <data name="Trainer_AppShiftsTip" xml:space="preserve"><value>Unchecked (recommended): ShiftBridge applies gears to the trainer and the app never sees them. Checked: ShiftBridge forwards + and − to the app (OpenBikeControl) and relays the trainer without changing anything; the app handles its own virtual gears. Either way, pair your controllers in one place only: a controller also paired in the app (TrainingPeaks Virtual, MyWhoosh…) shifts gears there on its own.</value></data>
   <data name="Nav_AppShort" xml:space="preserve"><value>App</value></data>
   <data name="Home_OpenSettings" xml:space="preserve"><value>Open settings</value></data>
   <data name="Home_KeepAlive" xml:space="preserve"><value>Keep ShiftBridge running (battery settings)</value></data>

@@ -250,6 +250,8 @@
   <data name="Mode_Stopped" xml:space="preserve"><value>Virtual shifting arrêté : vitesse non appliquée</value></data>
   <data name="Mode_ByTrainer" xml:space="preserve"><value>Appliquée par le trainer</value></data>
   <data name="Mode_ByApp" xml:space="preserve"><value>Pente adaptée par ShiftBridge</value></data>
+  <data name="Mode_AppShifts" xml:space="preserve"><value>Vitesses gérées par l'appli : trainer relayé sans modification</value></data>
+  <data name="Overlay_AppShifts" xml:space="preserve"><value>appli</value></data>
   <data name="Dev_Disconnect" xml:space="preserve"><value>Déconnecter</value></data>
   <data name="Dev_Connect" xml:space="preserve"><value>Connecter</value></data>
   <data name="Dev_NotConnected" xml:space="preserve"><value>Non connectée</value></data>
@@ -540,6 +542,8 @@
   <data name="Trainer_ReportGearTip" xml:space="preserve"><value>Expérimental (OpenBikeControl « Gear Set »). Une appli peut l'ignorer, ou l'appliquer à sa propre simulation : si la résistance double, désactivez cette option et gardez l'affichage par-dessus le jeu.</value></data>
   <data name="Trainer_SlopeOnly" xml:space="preserve"><value>Pente seule</value></data>
   <data name="Trainer_SlopeOnlyTip" xml:space="preserve"><value>À activer si votre trainer ignore le roulement et la traînée de la simulation.</value></data>
+  <data name="Trainer_AppShifts" xml:space="preserve"><value>Laisser l'appli gérer les vitesses</value></data>
+  <data name="Trainer_AppShiftsTip" xml:space="preserve"><value>Décoché (recommandé) : ShiftBridge applique les vitesses au trainer, l'appli ne les voit pas. Coché : ShiftBridge transmet + et − à l'appli (OpenBikeControl) et relaie le trainer sans rien modifier ; l'appli gère ses propres vitesses virtuelles. Dans les deux cas, n'appairez vos manettes qu'à un seul endroit : une manette appairée aussi dans l'appli (TrainingPeaks Virtual, MyWhoosh…) y change les vitesses de son côté.</value></data>
   <data name="Nav_AppShort" xml:space="preserve"><value>Appli</value></data>
   <data name="Home_OpenSettings" xml:space="preserve"><value>Ouvrir les réglages</value></data>
   <data name="Home_KeepAlive" xml:space="preserve"><value>Garder ShiftBridge actif (réglages de la batterie)</value></data>

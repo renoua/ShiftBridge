@@ -70,6 +70,7 @@ public sealed partial class MainViewModel : ObservableObject
         _useBluetooth = _config.TrainerTransport == "ble";
         _slopeOnlyMode = _config.SlopeOnlyMode;
         _nativeZwiftMode = _config.NativeZwiftMode;
+        _appHandlesShifting = _config.AppHandlesShifting;
         _reportGearToApp = _config.ReportGearToApp;
         _controllerVibration = _config.ControllerVibration;
         _ltwooPin = _config.LtwooPin ?? "";
@@ -1055,6 +1056,16 @@ public sealed partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _riderWeightText = "75";
     [ObservableProperty] private string _bikeWeightText = "9";
 
+    // Qui gère les vitesses virtuelles : ShiftBridge (défaut) ou l'appli d'entraînement
+    [ObservableProperty] private bool _appHandlesShifting;
+
+    partial void OnAppHandlesShiftingChanged(bool value)
+    {
+        if (_loading) return;
+        _ = _bridge.SetAppHandlesShiftingAsync(value);
+        SaveConfig();
+    }
+
     partial void OnNativeZwiftModeChanged(bool value)
     {
         if (_loading) return;
@@ -1819,6 +1830,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void UpdateOverlay()
     {
         string mode = !_bridge.TrainerProxyActive ? Strings.Overlay_ProxyStopped
+            : _bridge.AppHandlesShifting ? Strings.Overlay_AppShifts
             : _bridge.TrainerNativeActive ? Strings.Overlay_Native : "FTMS";
         OverlayGear = _bridge.Gear.Gear.ToString();
         int current = _bridge.Gear.Gear;
@@ -1827,8 +1839,9 @@ public sealed partial class MainViewModel : ObservableObject
         GearRatioText = Loc.Fmt(Strings.Gear_Ratio, _bridge.GearRatio);
         // Des phrases plutôt que « Natif / Compatible » : le premier mot ne dit rien à qui ne connaît pas les protocoles.
         ShiftModeText = !_bridge.TrainerProxyActive ? Strings.Mode_Stopped
+            : _bridge.AppHandlesShifting ? Strings.Mode_AppShifts
             : _bridge.TrainerNativeActive ? Strings.Mode_ByTrainer : Strings.Mode_ByApp;
-        IsGearApplied = _bridge.TrainerProxyActive;
+        IsGearApplied = _bridge.TrainerProxyActive && !_bridge.AppHandlesShifting;
     }
 
     /// <summary>La vitesse affichée est réellement appliquée au trainer (virtual shifting actif).</summary>

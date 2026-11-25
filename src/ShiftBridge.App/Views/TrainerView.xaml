@@ -137,6 +137,12 @@
 
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                <CheckBox Content="{x:Static loc:Strings.Trainer_AppShifts}" IsChecked="{Binding AppHandlesShifting}" />
+                                <TextBlock Style="{StaticResource InfoIcon}" VerticalAlignment="Center"
+                                           ToolTip="{x:Static loc:Strings.Trainer_AppShiftsTip}" />
+                            </StackPanel>
+
                             <StackPanel Orientation="Horizontal">
                                 <CheckBox Content="{x:Static loc:Strings.Trainer_Native}" IsChecked="{Binding NativeZwiftMode}" />
                                 <TextBlock Style="{StaticResource InfoIcon}" VerticalAlignment="Center"

@@ -323,6 +323,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
 
     private async Task TryStartNativeAsync()
     {
+        if (!Enabled) return; // l'appli gère les vitesses : le trainer ne doit recevoir aucun rapport de ShiftBridge
         if (!NativeZwiftMode) { Log?.Invoke("Mode natif Zwift désactivé : mise à l'échelle FTMS."); return; }
 
         SimulationParams? current; lock (_state) current = _appSim;
@@ -379,6 +380,29 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             NativeStateChanged?.Invoke();
             await ReapplyAsync();
         }
+    }
+
+    /// <summary>
+    /// Active ou coupe le virtual shifting à chaud. Coupé, le proxy devient un relais pur : l'appli gère elle-même ses vitesses
+    /// et le trainer retrouve aussitôt la simulation demandée par l'appli, sans réécriture. <paramref name="native"/> : mode
+    /// natif à reprendre au réarmement.
+    /// </summary>
+    public async Task SetShiftingEnabledAsync(bool enabled, bool native)
+    {
+        if (Enabled == enabled) return;
+        if (!enabled)
+        {
+            Enabled = false;
+            await DisposeNativeAsync(release: true);
+            NativeStateChanged?.Invoke();
+            // Le trainer garde la dernière simulation ajustée : on lui renvoie celle de l'appli telle quelle.
+            if (_arbiter is not null && _tracker.CanReapplySimulation && _tracker.LastTarget is { } sim) _arbiter.SubmitFromProxy(sim);
+            return;
+        }
+        Enabled = true;
+        NativeZwiftMode = native;
+        if (native) await SetNativeModeAsync(true);
+        await ReapplyAsync();
     }
 
     /// <summary>Après une reconnexion : nouvelle session native, puis le rapport et la simulation en cours.</summary>
