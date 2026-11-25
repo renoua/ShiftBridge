@@ -130,7 +130,13 @@ public class BridgeForegroundService : Service
             PendingIntentFlags.Immutable | PendingIntentFlags.UpdateCurrent);
 
         string title = string.IsNullOrWhiteSpace(vm.GearText) ? "ShiftBridge" : Loc.Fmt(Strings.Notif_GearTitle, vm.GearText);
-        return new Notification.Builder(this, ChannelId)
+        // Android 8+ : le canal porte l'importance. Avant, c'est la priorité de la notification (basse : pas de son).
+#pragma warning disable CA1422 // constructeur sans canal et SetPriority : obsolètes en 26+, utilisés seulement avant
+        var builder = OperatingSystem.IsAndroidVersionAtLeast(26)
+            ? new Notification.Builder(this, ChannelId)
+            : new Notification.Builder(this).SetPriority((int)NotificationPriority.Low)!;
+#pragma warning restore CA1422
+        return builder
             .SetContentTitle(title)!
             .SetContentText($"{vm.ControllersSummary} · {vm.AppSummary}")!
             .SetSmallIcon(Resource.Drawable.ic_stat_shiftbridge)!
@@ -145,6 +151,7 @@ public class BridgeForegroundService : Service
 
     private void EnsureChannel()
     {
+        if (!OperatingSystem.IsAndroidVersionAtLeast(26)) return; // pas de canaux avant Android 8
         if (GetSystemService(NotificationService) is not NotificationManager nm) return;
         // Importance basse : pas de son à chaque changement de rapport. Recréer un canal existant met à jour son nom et sa
         // description : ils suivent ainsi la langue choisie (l'importance, elle, n'est pas modifiée).
@@ -181,7 +188,10 @@ public class BridgeForegroundService : Service
     private async Task StopEverythingAsync()
     {
         await AppRuntime.StopAsync();
-        StopForeground(StopForegroundFlags.Remove);
+        if (OperatingSystem.IsAndroidVersionAtLeast(24)) StopForeground(StopForegroundFlags.Remove);
+#pragma warning disable CA1422 // StopForeground(bool) : obsolète en 24+, utilisé seulement sur Android 6
+        else StopForeground(true);
+#pragma warning restore CA1422
         StopSelf();
         Process.KillProcess(Process.MyPid()); // « Quitter » : on ne laisse pas un processus vide en mémoire
     }

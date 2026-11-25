@@ -38,6 +38,8 @@
             </StackPanel>
           </StackPanel>
           <CheckBox Content="{x:Static loc:Strings.Trainer_AutoStart}" IsChecked="{Binding AutoStartVirtualShifting}" />
+          <CheckBox Content="{x:Static loc:Strings.Trainer_AppShifts}" IsChecked="{Binding AppHandlesShifting}"
+                    ToolTip.Tip="{x:Static loc:Strings.Trainer_AppShiftsTip}" />
         </StackPanel>
       </Border>
       <Border Classes="card">

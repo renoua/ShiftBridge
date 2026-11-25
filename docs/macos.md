@@ -22,6 +22,8 @@ Allow Bluetooth when macOS prompts. On macOS versions with Local Network privacy
 
 ## Package
 
-Run `scripts/package-macos.sh` to build the release bundle and create `publish/macos-arm64/ShiftBridge-macos-arm64.dmg` for local testing. For distribution, set `DEVELOPER_ID_APPLICATION` to the Developer ID Application signing identity and `NOTARY_KEYCHAIN_PROFILE` to an existing `notarytool` keychain profile before running the same script. It signs with Hardened Runtime, submits the disk image to Apple, and staples and validates the ticket. Test the signed download on a Mac before uploading the disk image to GitHub Releases. Users install updates from the release download in **Settings**.
+> **Note:** `scripts/package-macos.sh` is not in the repository yet. Until it is added, build with the `dotnet build` commands above and package the `.app` manually.
+
+Run `scripts/package-macos.sh` to build the release bundle and create `publish/macos-arm64/ShiftBridge-macos-arm64.dmg` for local testing. For distribution, set `DEVELOPER_ID_APPLICATION` to the Developer ID Application signing identity and `NOTARY_KEYCHAIN_PROFILE` to an existing `notarytool` keychain profile before running the same script. It signs with Hardened Runtime, submits the disk image to Apple, and staples and validates the ticket. Test the signed download on a Mac before uploading the disk image to the [renoua/ShiftBridge releases](https://github.com/renoua/ShiftBridge/releases) under the exact name `ShiftBridge-macos-arm64.dmg`: the app looks for that file to offer updates. Users install updates from the release download in **Settings**.
 
 The macOS release uses network output. BLE peripheral output, global keyboard and HID capture, key suppression, the gear overlay, and login startup are deferred.

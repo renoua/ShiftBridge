@@ -5,7 +5,7 @@ namespace ShiftBridge.MacOS;
 
 internal sealed class MacReleaseChecker(Version currentVersion) : IAppUpdateChecker
 {
-    private const string Repository = "donaldmunro/ShiftBridge";
+    private const string Repository = "renoua/ShiftBridge";
     private const string ReleasesApi = $"https://api.github.com/repos/{Repository}/releases";
     private const string AssetName = "ShiftBridge-macos-arm64.dmg";
 
@@ -15,20 +15,12 @@ internal sealed class MacReleaseChecker(Version currentVersion) : IAppUpdateChec
 
     public async Task<UpdateInfo?> CheckAsync(CancellationToken ct)
     {
-        string? executablePath = Environment.ProcessPath;
-        if (executablePath is null || !File.Exists(executablePath)) return null;
-        var executableTimestamp = File.GetLastWriteTimeUtc(executablePath);
-
-        for (int page = 1; ; page++)
-        {
-            using var response = await Http.GetAsync($"{ReleasesApi}?per_page=100&page={page}", ct);
-            response.EnsureSuccessStatusCode();
-            string json = await response.Content.ReadAsStringAsync(ct);
-            var update = ReleaseParser.ParseReleases(json, currentVersion, AssetName, executableTimestamp);
-            if (update is not null) return update;
-            if (!response.Headers.TryGetValues("Link", out var links)
-                || !links.Any(link => link.Contains("rel=\"next\"", StringComparison.Ordinal))) return null;
-        }
+        // Les 100 releases les plus récentes suffisent : le DMG peut manquer sur une release (Windows/Android seuls),
+        // d'où la liste plutôt que /releases/latest.
+        using var response = await Http.GetAsync($"{ReleasesApi}?per_page=100", ct);
+        response.EnsureSuccessStatusCode();
+        string json = await response.Content.ReadAsStringAsync(ct);
+        return ReleaseParser.ParseReleases(json, currentVersion, AssetName);
     }
 
     private static HttpClient CreateClient()

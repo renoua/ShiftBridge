@@ -47,6 +47,8 @@ The bundles are written to `src/ShiftBridge.MacOS/bin/{Debug,Release}/net10.0-ma
 
 ## Package the Release DMG
 
+> **Note:** `scripts/package-macos.sh` is not in the repository yet. Until it is added, build with the `dotnet build` commands above and package the `.app` manually.
+
 From the repository root, with the same .NET 10 installation first on `PATH`, run these commands to create and verify an unsigned test image.
 
 ```sh

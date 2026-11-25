@@ -12,10 +12,10 @@
 
     <ApplicationTitle>ShiftBridge</ApplicationTitle>
     <ApplicationId>com.antoinerenou.shiftbridge</ApplicationId>
-    <Version>0.22.0</Version>
-    <ApplicationDisplayVersion>0.22.0</ApplicationDisplayVersion>
-    <ApplicationVersion>2200</ApplicationVersion>
-    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
+    <Version>0.23.0</Version>
+    <ApplicationDisplayVersion>0.23.0</ApplicationDisplayVersion>
+    <ApplicationVersion>2300</ApplicationVersion>
+    <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- Langues livrées : anglais (neutre) et français ; écarte les satellites NuGet des autres langues. -->
     <SatelliteResourceLanguages>en;fr</SatelliteResourceLanguages>

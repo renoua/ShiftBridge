@@ -106,4 +106,13 @@ public class ReleaseParserTests
 
         Assert.Equal(new Version(0, 17, 0), update?.Version);
     }
+
+    [Fact]
+    public void Mac_update_without_timestamp_only_needs_a_newer_version_with_the_dmg()
+    {
+        string newer = Json("v0.17.0", asset: MacAsset);
+        string older = Json("v0.15.0", asset: MacAsset);
+        Assert.Equal(new Version(0, 17, 0), ReleaseParser.ParseReleases($"[{older},{newer}]", Current, MacAsset)?.Version);
+        Assert.Null(ReleaseParser.ParseReleases($"[{older}]", Current, MacAsset));
+    }
 }

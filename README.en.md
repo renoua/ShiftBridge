@@ -50,11 +50,11 @@ To publish: create the GitHub release with the file **`ShiftBridge.exe`** (exact
 
 ## macOS
 
-The Apple Silicon desktop app uses Bluetooth for devices and OpenBikeControl TCP or DirCon for training apps. See [macOS build, usage and packaging](docs/macos.md).
+The Apple Silicon desktop app (macOS 13 or later, contributed by Donald Munro) uses Bluetooth for devices and OpenBikeControl TCP or DirCon for training apps. See [macOS build, usage and packaging](docs/macos.md).
 
 ## Android
 
-Same logic as on Windows (same controllers, same keys, same virtual shifting), in an app for Android 8.0 (API 26) or newer phones and tablets. The core is shared with the Windows version: only Bluetooth access and the interface differ.
+Same logic as on Windows (same controllers, same keys, same virtual shifting), in an app for Android 6.0 (API 23) or newer phones and tablets. The core is shared with the Windows version: only Bluetooth access and the interface differ.
 
 | Where does your training app run? | Connection to use |
 |---|---|
@@ -73,7 +73,7 @@ Good to know:
 
 These controllers lock about a minute after connecting if Zwift has not "unlocked" them in the last 24 h (the Zwift service is then no longer exposed). ShiftBridge detects the lock and reconnects automatically; for a lasting unlock, open the Zwift app, connect the controller for 10 to 30 s, close Zwift completely, then come back to ShiftBridge. A built-in wizard is planned for a later version.
 
-## Project status (v0.22.0)
+## Project status (v0.23.0)
 
 > **Tested with limited hardware.** ShiftBridge has been tried by its author on a small number of controllers, devices and apps. Other models, trainers, firmwares or apps may behave differently: treat it as a **beta**. Feedback is welcome (**Settings** → diagnostic log, then a [GitHub issue](https://github.com/renoua/ShiftBridge/issues)). In the table, "to validate on real hardware" means "not yet confirmed on a wide range of hardware".
 

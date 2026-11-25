@@ -50,11 +50,11 @@ Pour publier : créer la release GitHub avec le fichier **`ShiftBridge.exe`** (c
 
 ## macOS
 
-L’application pour Mac Apple Silicon utilise le Bluetooth pour les appareils et OpenBikeControl TCP ou DirCon pour les applications d’entraînement. Voir [la compilation, l’utilisation et la distribution sur macOS](docs/macos.md).
+L’application pour Mac Apple Silicon (macOS 13 ou plus, contribution de Donald Munro) utilise le Bluetooth pour les appareils et OpenBikeControl TCP ou DirCon pour les applications d’entraînement. Voir [la compilation, l’utilisation et la distribution sur macOS](docs/macos.md).
 
 ## Android
 
-Même logique que sur Windows (mêmes manettes, mêmes touches, même virtual shifting), dans une application pour téléphone ou tablette Android 8.0 (API 26) ou plus. Le cœur est partagé avec la version Windows : seuls l'accès Bluetooth et l'interface changent.
+Même logique que sur Windows (mêmes manettes, mêmes touches, même virtual shifting), dans une application pour téléphone ou tablette Android 6.0 (API 23) ou plus. Le cœur est partagé avec la version Windows : seuls l'accès Bluetooth et l'interface changent.
 
 | Où tourne votre appli d'entraînement ? | Connexion à utiliser |
 |---|---|
@@ -73,7 +73,7 @@ Même logique que sur Windows (mêmes manettes, mêmes touches, même virtual sh
 
 Ces manettes se verrouillent environ une minute après la connexion si Zwift ne les a pas « déverrouillées » dans les dernières 24 h (le service Zwift n'est alors plus exposé). ShiftBridge détecte le verrouillage et reconnecte automatiquement ; pour un déverrouillage durable, ouvrez l'application Zwift, connectez la manette 10 à 30 s, fermez Zwift complètement, puis revenez dans ShiftBridge. L'assistant intégré est prévu pour une version suivante.
 
-## État du projet (v0.22.0)
+## État du projet (v0.23.0)
 
 > **Testé avec un matériel limité.** ShiftBridge a été essayé par son auteur sur un petit nombre de manettes, d'appareils et d'applications. D'autres modèles, trainers, firmwares ou applications peuvent se comporter différemment : considérez-le comme une **bêta**. Les retours sont bienvenus (page *Réglages* → journal de diagnostic, puis une [issue GitHub](https://github.com/renoua/ShiftBridge/issues)). Dans le tableau, « à valider sur matériel réel » signifie « pas encore confirmé sur un éventail large de matériel ».
 

@@ -25,8 +25,11 @@ public static class ReleaseParser
         catch (Exception ex) when (ex is JsonException or InvalidOperationException) { return null; }
     }
 
-    /// <summary>Cherche sur une page de versions stables un fichier publié après la date de l'exécutable.</summary>
-    public static UpdateInfo? ParseReleases(string json, Version current, string assetName, DateTimeOffset executableTimestamp)
+    /// <summary>
+    /// Cherche, sur une page de l'API (liste de releases), la version stable la plus récente qui publie <paramref name="assetName"/>.
+    /// <paramref name="executableTimestamp"/> (facultatif) écarte en plus les fichiers envoyés avant cette date.
+    /// </summary>
+    public static UpdateInfo? ParseReleases(string json, Version current, string assetName, DateTimeOffset? executableTimestamp = null)
     {
         try
         {

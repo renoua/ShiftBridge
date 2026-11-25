@@ -89,7 +89,13 @@ public class MainActivity : MauiAppCompatActivity
 
     private void StartBridge()
     {
-        try { StartForegroundService(new Intent(this, typeof(BridgeForegroundService))); }
+        try
+        {
+            var intent = new Intent(this, typeof(BridgeForegroundService));
+            // Avant Android 8, StartService suffit : le service passe lui-même au premier plan (StartForeground).
+            if (OperatingSystem.IsAndroidVersionAtLeast(26)) StartForegroundService(intent);
+            else StartService(intent);
+        }
         catch (Exception ex) { AppRuntime.ViewModel.ReportError(Loc.Fmt(Strings.Err_ForegroundService, ex.Message)); }
         _ = StartRuntimeAsync();
     }
