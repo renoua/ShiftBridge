@@ -15,14 +15,14 @@ public sealed class BleTrainerLink : ITrainerLink
     private static readonly BleConnectOptions Options = new(TimeSpan.FromSeconds(6));
 
     private readonly IBleCentral _central;
-    private readonly ulong _address;
+    private readonly BleDeviceId _address;
     private readonly Dictionary<Guid, List<BleCharacteristicInfo>> _chars = [];
     private readonly Dictionary<Guid, Guid> _serviceOf = []; // caractéristique → service
     private IBleConnection? _connection;
     private bool _disposed;
     private int _disconnectRaised;
 
-    public BleTrainerLink(IBleCentral central, ulong address, string name)
+    public BleTrainerLink(IBleCentral central, BleDeviceId address, string name)
     {
         _central = central;
         _address = address;

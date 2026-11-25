@@ -40,15 +40,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     private readonly IUiDispatcher _ui;
     private readonly IAppHost _host;
+    private readonly IMdnsServiceDiscovery? _mdns;
 
     /// <param name="localInput">Clavier, télécommandes HID et manettes de jeu. Null = non pris en charge (Android) : l'interface les masque.</param>
-    public MainViewModel(IBlePlatform platform, IUiDispatcher ui, IAppHost host, ILocalInputProvider? localInput = null)
+    public MainViewModel(IBlePlatform platform, IUiDispatcher ui, IAppHost host, ILocalInputProvider? localInput = null,
+        IMdnsServiceDiscovery? mdns = null)
     {
+        _mdns = mdns;
         _ui = ui;
         _host = host;
         _config = ConfigStore.Load();
         HasLocalInput = localInput is not null;
-        _bridge = new BridgeService(_config, platform, localInput);
+        _bridge = new BridgeService(_config, platform, localInput, mdns);
         _editProfile = _bridge.DefaultProfile;
 
         Actions = [.. ObcButtonCatalog.Assignable.Select(a => new ActionItem(a.Id, a.Category, a.Label))];
@@ -91,7 +94,7 @@ public sealed partial class MainViewModel : ObservableObject
         _cogText = _bridge.Drivetrain.CogTeeth.ToString();
         _drivetrainInfo = Loc.Fmt(Strings.Drive_RealRatio, _bridge.Drivetrain.Ratio, _bridge.Drivetrain);
         // Dernier trainer Bluetooth utilisé : proposé d'emblée, sans nouvelle recherche.
-        if (ulong.TryParse(_config.TrainerBleAddress, out var savedAddress) && savedAddress != 0)
+        if (BleDeviceId.TryParseSavedAddress(_config.TrainerBleAddress, out var savedAddress))
         {
             var saved = new DiscoveredBleTrainer(savedAddress, string.IsNullOrWhiteSpace(_config.TrainerBleName) ? Strings.Trainer_Last : _config.TrainerBleName, 0, TrainerProtocols.None);
             _savedBleTrainer = saved;
@@ -99,7 +102,7 @@ public sealed partial class MainViewModel : ObservableObject
             _selectedBleTrainer = saved;
         }
         // Dernier capteur cardio : proposé d'emblée (reconnecté automatiquement au démarrage).
-        if (ulong.TryParse(_config.HeartRateBleAddress, out var savedHr) && savedHr != 0)
+        if (BleDeviceId.TryParseSavedAddress(_config.HeartRateBleAddress, out var savedHr))
         {
             var hr = new DiscoveredHeartRateSensor(savedHr, string.IsNullOrWhiteSpace(_config.HeartRateBleName) ? Strings.Hr_Title : _config.HeartRateBleName, 0);
             _savedHeartRate = hr;
@@ -364,6 +367,12 @@ public sealed partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void OpenBatterySettings() => _host.OpenBatterySettings();
 
+    [RelayCommand]
+    private void OpenLocalNetworkSettings() => _host.OpenLocalNetworkSettings();
+
+    [RelayCommand]
+    private void OpenReleaseDownloads() => _host.OpenReleaseDownloads();
+
     /// <summary>Page publique de la politique de confidentialité (exigée par le Play Store).</summary>
     public const string PrivacyPolicyUrl = "https://renoua.github.io/ShiftBridge/privacy.html";
 
@@ -457,7 +466,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (_host.IsBluetoothOn) return true;
         _pendingBluetooth = retry;
         SetBluetoothOff(true);
-        _host.RequestBluetoothOn();
+        if (_host.PromptForBluetoothOnAutomatically) _host.RequestBluetoothOn();
         return false;
     }
 
@@ -958,7 +967,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (EnableNetwork && _tcp is null)
         {
-            _tcp = new ObcTcpServer();
+            _tcp = new ObcTcpServer(mdns: _mdns?.CreateAdvertiser());
             await _bridge.AddTransportAsync(_tcp);
             if (!_bridge.Transports.Contains(_tcp)) _tcp = null; // échec de démarrage
         }
@@ -970,7 +979,7 @@ public sealed partial class MainViewModel : ObservableObject
 
         if (EnableDirCon && _dircon is null)
         {
-            _dircon = new DirConServer();
+            _dircon = new DirConServer(_mdns?.CreateAdvertiser());
             await _bridge.AddTransportAsync(_dircon);
             if (!_bridge.Transports.Contains(_dircon)) _dircon = null;
         }
@@ -1439,7 +1448,7 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Reconnexion au dernier capteur au démarrage, AVANT le proxy (qui le republie sans redémarrer). Un capteur éteint ne bloque rien.</summary>
     private async Task AutoConnectHeartRateAsync()
     {
-        if (!ulong.TryParse(_config.HeartRateBleAddress, out var address) || address == 0) return;
+        if (!BleDeviceId.TryParseSavedAddress(_config.HeartRateBleAddress, out var address)) return;
         try { await _bridge.ConnectHeartRateAsync(address, string.IsNullOrWhiteSpace(_config.HeartRateBleName) ? Strings.Hr_Title : _config.HeartRateBleName); }
         catch (Exception ex) { _hrFailed = true; HeartRateStatus = Loc.Fmt(Strings.Hr_ConnectFailed, ex.Message); AppendLog(HeartRateStatus); }
         RefreshHeartRate();
@@ -1567,7 +1576,7 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnMinimizeToTrayChanged(bool value) { if (!_loading) { _config.MinimizeToTray = value; SaveConfig(); } }
     partial void OnStartWithWindowsChanged(bool value) { if (!_loading) { _config.StartWithWindows = value; SaveConfig(); } }
 
-    // ---------- Mises à jour (Windows) ----------
+    // ---------- Mises à jour ----------
 
     private static readonly TimeSpan UpdateFirstDelay = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan UpdateInterval = TimeSpan.FromHours(24);
@@ -1575,6 +1584,7 @@ public sealed partial class MainViewModel : ObservableObject
     private readonly CancellationTokenSource _updateCts = new();
     private ShiftBridge.Core.Updates.UpdateInfo? _pendingUpdate;
     private bool _updateDismissed;
+    private int _updateCheckInProgress;
 
     [ObservableProperty] private bool _checkForUpdates;
     [ObservableProperty] private bool _updateAvailable;
@@ -1588,6 +1598,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     /// <summary>L'hôte sait se mettre à jour (Windows) : affiche la carte « Mises à jour » des Réglages.</summary>
     public bool HasUpdater => _host.Updater is not null;
+    public bool HasUpdateChecker => _host.UpdateChecker is not null;
 
     partial void OnCheckForUpdatesChanged(bool value)
     {
@@ -1598,7 +1609,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void StartUpdateLoop()
     {
-        if (_host.Updater is null) return;
+        if (!HasUpdateChecker) return;
         _ = Task.Run(async () =>
         {
             try
@@ -1618,12 +1629,12 @@ public sealed partial class MainViewModel : ObservableObject
     /// <summary>Interroge GitHub. En automatique, un échec reste silencieux (journal seulement) ; en manuel, l'état s'affiche dans les Réglages.</summary>
     private async Task CheckUpdatesAsync(bool manual)
     {
-        var updater = _host.Updater;
-        if (updater is null) return;
-        _ui.Post(() => { IsCheckingUpdates = true; if (manual) UpdateStatus = ""; });
+        var checker = _host.UpdateChecker;
+        if (checker is null || Interlocked.Exchange(ref _updateCheckInProgress, 1) != 0) return;
         try
         {
-            var update = await updater.CheckAsync(_updateCts.Token);
+            _ui.Post(() => { IsCheckingUpdates = true; if (manual) UpdateStatus = ""; });
+            var update = await checker.CheckAsync(_updateCts.Token);
             _ui.Post(() =>
             {
                 _pendingUpdate = update;
@@ -1634,18 +1645,22 @@ public sealed partial class MainViewModel : ObservableObject
                     if (manual) UpdateStatus = Loc.Fmt(Strings.Update_UpToDate, _host.AppVersion);
                     return;
                 }
-                UpdateText = Loc.Fmt(Strings.Update_Available, update.Version.ToString(3));
+                UpdateText = Loc.Fmt(Strings.Update_Available, update.Version.ToString());
                 UpdateStatus = UpdateText;
                 if (!_updateDismissed || manual) { _updateDismissed = false; UpdateAvailable = true; }
             });
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (_updateCts.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             AppendLog($"Mise à jour : vérification impossible ({ex.Message})");
             if (manual) _ui.Post(() => UpdateStatus = Strings.Update_CheckFailed);
         }
-        finally { _ui.Post(() => IsCheckingUpdates = false); }
+        finally
+        {
+            _ui.Post(() => IsCheckingUpdates = false);
+            Interlocked.Exchange(ref _updateCheckInProgress, 0);
+        }
     }
 
     [RelayCommand]

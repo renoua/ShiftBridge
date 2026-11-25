@@ -253,7 +253,7 @@ public class ZwiftControllerTests
         c.Start();
         await WaitFor(() => c.State == ControllerState.Connected);
 
-        Assert.Equal(0xAABBCCDDEEFFUL, central.Requests[0].Address);
+        Assert.Equal(new BleDeviceId(0xAABBCCDDEEFFUL), central.Requests[0].Address);
         Assert.True(conn.FirstDiscoverStrict); // le service Zwift est requis : un échec n'est pas un « verrouillage »
         Assert.Equal(BleNotifyMode.Notify, conn.Notify[(Svc, ZwiftConstants.AsyncCharacteristic)]);
         Assert.Equal(BleNotifyMode.Indicate, conn.Notify[(Svc, ZwiftConstants.SyncTxCharacteristic)]);

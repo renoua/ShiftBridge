@@ -1,0 +1,81 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="using:ShiftBridge.Core.Localization"
+        xmlns:vm="using:ShiftBridge.Presentation"
+        xmlns:desktop="using:ShiftBridge.Desktop"
+        xmlns:views="using:ShiftBridge.Desktop.Views"
+        x:Class="ShiftBridge.Desktop.MainWindow" x:DataType="vm:MainViewModel"
+        Title="ShiftBridge" Width="1000" Height="780" MinWidth="760" MinHeight="560"
+        Background="#10171D" Foreground="#EEF5F3" WindowStartupLocation="CenterScreen">
+  <Window.Resources>
+    <desktop:PageIndexConverter x:Key="PageIndex" />
+  </Window.Resources>
+  <Window.Styles>
+    <Style Selector="TextBlock">
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.title">
+      <Setter Property="FontSize" Value="27" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.section">
+      <Setter Property="FontSize" Value="17" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.detail">
+      <Setter Property="Foreground" Value="#A7B6BD" />
+    </Style>
+    <Style Selector="TextBlock.label">
+      <Setter Property="Foreground" Value="#9CBCBA" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="LetterSpacing" Value="1.15" />
+    </Style>
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="#18232A" />
+      <Setter Property="BorderBrush" Value="#2B3A42" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="18" />
+    </Style>
+    <Style Selector="Border.alert">
+      <Setter Property="Background" Value="#34291C" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="12" />
+    </Style>
+    <Style Selector="Button.accent">
+      <Setter Property="Background" Value="#87E1CB" />
+      <Setter Property="Foreground" Value="#102823" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+  </Window.Styles>
+  <Grid RowDefinitions="Auto,*" Margin="24,18,24,0">
+    <StackPanel Spacing="8" Margin="0,0,0,12">
+      <TextBlock Text="ShiftBridge" FontSize="20" FontWeight="Bold" />
+      <Border Classes="alert" IsVisible="{Binding HasPermissionProblem}">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <TextBlock Text="{Binding PermissionProblem}" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Content="{x:Static loc:Strings.Home_OpenSettings}" Command="{Binding OpenAppSettingsCommand}" />
+        </Grid>
+      </Border>
+      <Border Classes="alert" IsVisible="{Binding ShowBluetoothOff}">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <TextBlock Text="{x:Static loc:Strings.Bt_OffBanner}" VerticalAlignment="Center" />
+          <Button Grid.Column="1" Content="{x:Static loc:Strings.Bt_Enable}" Command="{Binding EnableBluetoothCommand}" />
+        </Grid>
+      </Border>
+    </StackPanel>
+    <TabControl Grid.Row="1" SelectedIndex="{Binding CurrentPage, Converter={StaticResource PageIndex}}">
+      <TabItem Header="{x:Static loc:Strings.Nav_Home}"><views:HomeView /></TabItem>
+      <TabItem Header="{x:Static loc:Strings.Nav_Controllers}"><views:DevicesView /></TabItem>
+      <TabItem Header="{x:Static loc:Strings.Nav_Buttons}"><views:ButtonsView /></TabItem>
+      <TabItem Header="{x:Static loc:Strings.Nav_Trainer}"><views:TrainerView /></TabItem>
+      <TabItem Header="{x:Static loc:Strings.Nav_App}"><views:AppsView /></TabItem>
+      <TabItem Header="{x:Static loc:Strings.Nav_Settings}"><views:SettingsView /></TabItem>
+      <TabItem Header="{x:Static loc:Strings.Nav_Diagnostic}"><views:DiagnosticsView /></TabItem>
+    </TabControl>
+  </Grid>
+</Window>

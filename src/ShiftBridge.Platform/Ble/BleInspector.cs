@@ -4,9 +4,9 @@ using ShiftBridge.Core.Localization;
 namespace ShiftBridge.Platform.Ble;
 
 /// <summary>Un appareil BLE vu par l'inspecteur (n'importe lequel, reconnu ou non).</summary>
-public sealed record InspectedDevice(ulong Address, string Name, short Rssi, string Details)
+public sealed record InspectedDevice(BleDeviceId Address, string Name, short Rssi, string Details)
 {
-    public string AddressText => BleAddress.ToText(Address);
+    public string AddressText => Address.ToString();
 }
 
 /// <summary>
@@ -25,7 +25,7 @@ public sealed class BleInspector(BleAdvertisementHub hub, IBleCentral central) :
         public readonly Dictionary<Guid, byte[]> ServiceData = [];
     }
 
-    private readonly ConcurrentDictionary<ulong, Seen> _seen = new();
+    private readonly ConcurrentDictionary<BleDeviceId, Seen> _seen = new();
     private readonly object _lock = new();
     private IDisposable? _subscription;
     private CancellationTokenSource? _captureCts;
@@ -33,7 +33,7 @@ public sealed class BleInspector(BleAdvertisementHub hub, IBleCentral central) :
 
     public bool IsScanning => _subscription is not null;
     public bool IsCapturing => _captureTask is { IsCompleted: false };
-    public ulong CapturingAddress { get; private set; }
+    public BleDeviceId CapturingAddress { get; private set; }
 
     public event Action? DevicesChanged;
     public event Action<string>? Log;
@@ -103,10 +103,10 @@ public sealed class BleInspector(BleAdvertisementHub hub, IBleCentral central) :
     }
 
     /// <summary>Se connecte, journalise l'arbre GATT et chaque notification jusqu'à <see cref="StopCaptureAsync"/> ou la déconnexion.</summary>
-    public async Task StartCaptureAsync(ulong address)
+    public async Task StartCaptureAsync(BleDeviceId address)
     {
         await StopCaptureAsync();
-        string name = _seen.TryGetValue(address, out var s) && s.Name.Length > 0 ? s.Name : BleAddress.ToText(address);
+        string name = _seen.TryGetValue(address, out var s) && s.Name.Length > 0 ? s.Name : address.ToString();
         _captureCts = new CancellationTokenSource();
         CapturingAddress = address;
         _captureTask = CaptureAsync(address, name, _captureCts.Token);
@@ -123,7 +123,7 @@ public sealed class BleInspector(BleAdvertisementHub hub, IBleCentral central) :
         _captureCts = null;
     }
 
-    private async Task CaptureAsync(ulong address, string name, CancellationToken ct)
+    private async Task CaptureAsync(BleDeviceId address, string name, CancellationToken ct)
     {
         IBleConnection? connection = null;
         try

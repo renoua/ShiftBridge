@@ -1,0 +1,67 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:ShiftBridge.Core.Localization"
+             xmlns:vm="using:ShiftBridge.Presentation"
+             x:Class="ShiftBridge.Desktop.Views.DevicesView" x:DataType="vm:MainViewModel" x:Name="DevicesPage">
+  <ScrollViewer>
+    <StackPanel Spacing="14" Margin="0,18,0,24">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+        <StackPanel Spacing="4">
+          <TextBlock Classes="title" Text="{x:Static loc:Strings.Nav_Controllers}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Devices_Intro}" />
+        </StackPanel>
+        <Button Grid.Column="1" Classes="accent" VerticalAlignment="Center" Content="{x:Static loc:Strings.Devices_Scan}" Command="{Binding StartScanCommand}" />
+      </Grid>
+      <TextBlock Classes="detail" Text="{x:Static loc:Strings.Devices_Scanning}" IsVisible="{Binding IsScanning}" />
+      <ItemsControl ItemsSource="{Binding Devices}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:DeviceRowViewModel">
+            <Border Classes="card" Margin="0,0,0,8">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                <StackPanel Spacing="4" ToolTip.Tip="{Binding Detail}">
+                  <TextBlock Classes="section" Text="{Binding Title}" />
+                  <TextBlock Classes="detail" Text="{Binding StateText}" />
+                  <TextBlock Classes="detail" Text="{Binding BatteryText}" IsVisible="{Binding HasBattery}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <Button Content="{x:Static loc:Strings.Dev_Pair}" IsVisible="{Binding CanPair}"
+                          Command="{Binding #DevicesPage.DataContext.PairDeviceCommand}" CommandParameter="{Binding}" />
+                  <Button Content="{Binding ActionText}" Command="{Binding #DevicesPage.DataContext.ToggleDeviceCommand}" CommandParameter="{Binding}" />
+                  <Button Content="{x:Static loc:Strings.Dev_Rename}" Command="{Binding #DevicesPage.DataContext.RenameDeviceCommand}" CommandParameter="{Binding}" />
+                  <Button Content="{x:Static loc:Strings.Devices_Vibrate}" IsVisible="{Binding CanVibrate}"
+                          Command="{Binding #DevicesPage.DataContext.VibrateDeviceCommand}" CommandParameter="{Binding}" />
+                  <Button Content="{x:Static loc:Strings.Devices_Forget}" Command="{Binding #DevicesPage.DataContext.ForgetDeviceCommand}" CommandParameter="{Binding}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Expander Header="{x:Static loc:Strings.Devices_NotFoundTitle}" HorizontalAlignment="Stretch">
+        <TextBlock Classes="detail" Text="{x:Static loc:Strings.Devices_NotFoundBody}" />
+      </Expander>
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="{x:Static loc:Strings.Hr_Title}" />
+          <TextBlock Classes="detail" Text="{Binding HeartRateStatus}" />
+          <ComboBox ItemsSource="{Binding FoundHeartRateSensors}" SelectedItem="{Binding SelectedHeartRateSensor}"
+                    HorizontalAlignment="Stretch" AutomationProperties.Name="{x:Static loc:Strings.Hr_Title}" />
+          <WrapPanel>
+            <Button Margin="0,0,8,0" Content="{Binding HeartRateScanButtonText}" Command="{Binding ToggleHeartRateScanCommand}" />
+            <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Hr_Connect}" Command="{Binding ConnectHeartRateCommand}" />
+            <Button Content="{x:Static loc:Strings.Hr_Disconnect}" Command="{Binding DisconnectHeartRateCommand}" />
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+      <Expander Header="{x:Static loc:Strings.Common_AdvancedShort}" HorizontalAlignment="Stretch">
+        <StackPanel Spacing="6">
+          <CheckBox Content="{x:Static loc:Strings.Devices_AutoReconnect}" IsChecked="{Binding AutoReconnect}" />
+          <CheckBox Content="{x:Static loc:Strings.Devices_Vibration}" IsChecked="{Binding ControllerVibration}" />
+          <CheckBox Content="{x:Static loc:Strings.Axs_AdvancedLabel}" IsChecked="{Binding SramAxsAdvanced}" ToolTip.Tip="{x:Static loc:Strings.Axs_AdvancedHint}" />
+          <TextBlock Text="{x:Static loc:Strings.Ltwoo_PinLabel}" />
+          <TextBox Text="{Binding LtwooPin}" MaxLength="3" Width="100" HorizontalAlignment="Left" ToolTip.Tip="{x:Static loc:Strings.Ltwoo_PinHint}" />
+        </StackPanel>
+      </Expander>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

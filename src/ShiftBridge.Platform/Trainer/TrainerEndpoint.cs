@@ -1,3 +1,4 @@
+using ShiftBridge.Platform.Ble;
 namespace ShiftBridge.Platform.Trainer;
 
 /// <summary>Comment joindre le vrai trainer : en Wi-Fi/Ethernet (DirCon) ou en Bluetooth.</summary>
@@ -7,5 +8,5 @@ public abstract record TrainerEndpoint
     public sealed record DirCon(string Host, int Port, IReadOnlyDictionary<string, string>? Txt = null) : TrainerEndpoint;
 
     /// <summary>Trainer Bluetooth (FTMS, ou FE-C expérimental).</summary>
-    public sealed record Ble(ulong Address, string Name) : TrainerEndpoint;
+    public sealed record Ble(BleDeviceId Address, string Name) : TrainerEndpoint;
 }

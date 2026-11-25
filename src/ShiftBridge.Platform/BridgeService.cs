@@ -24,10 +24,11 @@ namespace ShiftBridge.Platform;
 public sealed class BridgeService : IAsyncDisposable
 {
     private readonly IBlePlatform _platform;
+    private readonly IMdnsServiceDiscovery? _mdns;
     private readonly BleAdvertisementHub _hub;
     private readonly ControllerScanner _scanner;
-    private readonly ConcurrentDictionary<ulong, DiscoveredController> _seen = new();
-    private readonly ConcurrentDictionary<ulong, IController> _controllers = new();
+    private readonly ConcurrentDictionary<BleDeviceId, DiscoveredController> _seen = new();
+    private readonly ConcurrentDictionary<BleDeviceId, IController> _controllers = new();
     private readonly List<IObcTransport> _transports = [];
     private readonly object _transportsLock = new(); // _transports est lue par la boucle d'envoi pendant que l'UI en ajoute/retire
     private readonly ConcurrentDictionary<string, byte> _manuallyDisconnected = new(); // manettes que l'utilisateur a déconnectées
@@ -43,8 +44,10 @@ public sealed class BridgeService : IAsyncDisposable
 
     /// <param name="platform">Accès Bluetooth de la plateforme (Windows, Android…). Sans lui, aucun scan ni aucune connexion BLE.</param>
     /// <param name="localInput">Clavier, télécommandes HID et manettes de jeu. Sans lui, seules les manettes Zwift sont écoutées.</param>
-    public BridgeService(AppConfig config, IBlePlatform? platform = null, ILocalInputProvider? localInput = null)
+    public BridgeService(AppConfig config, IBlePlatform? platform = null, ILocalInputProvider? localInput = null,
+        IMdnsServiceDiscovery? mdns = null)
     {
+        _mdns = mdns;
         _localInput = localInput ?? new NullLocalInputProvider();
         _platform = platform ?? new NullBlePlatform();
         _hub = new BleAdvertisementHub(_platform.CreateScanner());
@@ -382,7 +385,7 @@ public sealed class BridgeService : IAsyncDisposable
     }
 
     /// <summary>Lance l'appairage d'un dérailleur AXS connecté en mode avancé (il doit être en mode appairage). Vrai si la clé a été obtenue.</summary>
-    public async Task<bool> PairAxsAsync(ulong address)
+    public async Task<bool> PairAxsAsync(BleDeviceId address)
     {
         if (!_controllers.TryGetValue(address, out var c) || c is not SramAxsAdvancedController axs) return false;
         bool ok = await axs.PairAsync();
@@ -414,9 +417,9 @@ public sealed class BridgeService : IAsyncDisposable
         }
     }
 
-    public async Task DisconnectAsync(ulong address, bool forget = false)
+    public async Task DisconnectAsync(BleDeviceId address, bool forget = false)
     {
-        var addressText = BleAddress.ToText(address);
+        var addressText = address.ToString();
         if (_controllers.TryRemove(address, out var c))
         {
             // Sans cette mémoire, AutoConnectKnown reconnecterait la manette à sa prochaine annonce (moins d'une seconde).
@@ -432,7 +435,7 @@ public sealed class BridgeService : IAsyncDisposable
 
     /// <summary>Seuil (en %) sous lequel une manette est signalée en batterie faible.</summary>
     public const int LowBatteryPercent = 15;
-    private readonly ConcurrentDictionary<ulong, byte> _lowBatteryAlerted = new();
+    private readonly ConcurrentDictionary<BleDeviceId, byte> _lowBatteryAlerted = new();
 
     /// <summary>Nom à afficher : le nom donné par l'utilisateur, sinon celui annoncé en Bluetooth.</summary>
     public string DisplayName(DiscoveredController device)
@@ -636,7 +639,7 @@ public sealed class BridgeService : IAsyncDisposable
     private ReconnectingTrainerLink? _trainerLink;
     private DirConTrainerProxy? _proxy;
     private readonly BleTrainerScanner _trainerScanner;
-    private readonly ConcurrentDictionary<ulong, DiscoveredBleTrainer> _bleTrainers = new();
+    private readonly ConcurrentDictionary<BleDeviceId, DiscoveredBleTrainer> _bleTrainers = new();
 
     public bool TrainerProxyActive => _proxy is not null;
     public int TrainerProxyPort => _proxy?.Port ?? 0;
@@ -762,7 +765,7 @@ public sealed class BridgeService : IAsyncDisposable
     // ---------- Cardio (ceinture / montre Bluetooth republiée par le proxy) ----------
 
     private readonly BleHeartRateScanner _hrScanner;
-    private readonly ConcurrentDictionary<ulong, DiscoveredHeartRateSensor> _hrSensors = new();
+    private readonly ConcurrentDictionary<BleDeviceId, DiscoveredHeartRateSensor> _hrSensors = new();
     private HeartRateSource? _hrSource;
     private TrainerEndpoint? _proxyEndpoint; // pour redémarrer le proxy quand le capteur change
 
@@ -792,7 +795,7 @@ public sealed class BridgeService : IAsyncDisposable
     /// Se connecte au capteur cardio (la première connexion doit réussir ; ensuite reconnexion automatique). Si le proxy tourne,
     /// il redémarre pour republier le service cardio (l'appli d'entraînement se reconnecte).
     /// </summary>
-    public async Task ConnectHeartRateAsync(ulong address, string name)
+    public async Task ConnectHeartRateAsync(BleDeviceId address, string name)
     {
         await _proxyGate.WaitAsync();
         try
@@ -804,7 +807,7 @@ public sealed class BridgeService : IAsyncDisposable
             source.StateChanged += _ => HeartRateChanged?.Invoke();
             await source.ConnectAsync();
             _hrSource = source;
-            Config.HeartRateBleAddress = address.ToString();
+            Config.HeartRateBleAddress = address.ToSavedAddress();
             Config.HeartRateBleName = name;
             Log?.Invoke($"Capteur cardio connecté : {name}");
             await RestartProxyForHeartRateAsync();
@@ -848,7 +851,11 @@ public sealed class BridgeService : IAsyncDisposable
     public event Action? TrainerChanged;
     public event Action? BleTrainersChanged;
 
-    public Task<List<DiscoveredTrainer>> FindTrainersAsync() => TrainerDiscovery.BrowseAsync(TimeSpan.FromSeconds(4));
+    public Task<List<DiscoveredTrainer>> FindTrainersAsync()
+    {
+        var duration = TimeSpan.FromSeconds(4);
+        return _mdns?.BrowseTrainersAsync(duration) ?? TrainerDiscovery.BrowseAsync(duration);
+    }
 
     public void StartTrainerScan()
     {
@@ -917,7 +924,7 @@ public sealed class BridgeService : IAsyncDisposable
                     catch { await l.DisposeAsync(); throw; }
                     return l;
                 };
-                Config.TrainerTransport = "ble"; Config.TrainerBleAddress = b.Address.ToString(); Config.TrainerBleName = b.Name;
+                Config.TrainerTransport = "ble"; Config.TrainerBleAddress = b.Address.ToSavedAddress(); Config.TrainerBleName = b.Name;
                 break;
 
             default: throw new ArgumentException("Type de trainer inconnu.", nameof(endpoint));
@@ -932,7 +939,8 @@ public sealed class BridgeService : IAsyncDisposable
         {
             await link.ConnectAsync();
 
-            proxy = new DirConTrainerProxy(link, _vsModel, txt, policy: policy, trainerLabel: label, transportLabel: transport)
+            proxy = new DirConTrainerProxy(link, _vsModel, txt, policy: policy, trainerLabel: label, transportLabel: transport,
+                mdns: _mdns?.CreateAdvertiser())
             {
                 Enabled = !Config.AppHandlesShifting, // l'appli gère les vitesses : relais pur
                 NativeZwiftMode = Config.NativeZwiftMode,

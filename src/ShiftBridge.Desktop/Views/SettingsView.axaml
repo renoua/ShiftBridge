@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:ShiftBridge.Core.Localization"
+             xmlns:vm="using:ShiftBridge.Presentation"
+             x:Class="ShiftBridge.Desktop.Views.SettingsView" x:DataType="vm:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Spacing="14" Margin="0,18,0,24">
+      <TextBlock Classes="title" Text="{x:Static loc:Strings.Nav_Settings}" />
+      <Border Classes="card">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="{x:Static loc:Strings.Settings_SecLanguage}" />
+          <ComboBox ItemsSource="{Binding LanguageOptions}" SelectedItem="{Binding SelectedLanguage}" MinWidth="220"
+                    AutomationProperties.Name="{x:Static loc:Strings.Settings_SecLanguage}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Lang_RestartNote}" IsVisible="{Binding LanguageRestartNeeded}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card" IsVisible="{Binding HasUpdateChecker}">
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="{x:Static loc:Strings.Settings_SecUpdates}" />
+          <CheckBox Content="{x:Static loc:Strings.Settings_CheckUpdates}" IsChecked="{Binding CheckForUpdates}" />
+          <WrapPanel>
+            <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Settings_CheckNow}" Command="{Binding CheckUpdatesNowCommand}" />
+            <Button Content="{x:Static loc:Strings.Mac_ReleaseDownloads}" Command="{Binding OpenReleaseDownloadsCommand}" />
+          </WrapPanel>
+          <TextBlock Classes="detail" Text="{Binding UpdateStatus}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card">
+        <Button Content="{x:Static loc:Strings.Settings_PrivacyPolicy}" Command="{Binding OpenPrivacyPolicyCommand}" />
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

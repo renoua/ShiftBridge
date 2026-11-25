@@ -22,8 +22,8 @@ Pour fonctionner, ShiftBridge lit et relaie en temps réel, sur votre appareil :
 
 Ces informations ne sont transmises **qu'à l'application d'entraînement que vous avez choisie** (TrainingPeaks Virtual, Les jeux du cycle), par Bluetooth ou sur votre réseau local (OpenBikeControl, DirCon). Elles ne sortent jamais vers Internet. Ce que fait ensuite cette application est régi par sa propre politique.
 
-### Mises à jour (Windows uniquement)
-La version Windows cherche une nouvelle version de ShiftBridge au lancement, puis une fois par jour, en interrogeant l'API publique de GitHub (`api.github.com`) ; si vous choisissez de mettre à jour, le nouveau fichier est téléchargé depuis `github.com`. Comme toute requête Internet, elle révèle votre adresse IP à GitHub et indique la version de l'application ; aucune autre donnée (appareils, réglages, mesures) n'est envoyée, et rien n'est transmis au développeur. Vous pouvez la désactiver dans **Réglages → Mises à jour**. La version Android est mise à jour par le Play Store et n'effectue pas cette requête.
+### Mises à jour (Windows et macOS)
+Les versions Windows et macOS recherchent une nouvelle version de ShiftBridge au lancement, puis une fois par jour, via l'API publique de GitHub (`api.github.com`). Windows télécharge le fichier depuis `github.com` si vous choisissez de mettre à jour. macOS affiche un avis et vous laisse télécharger le fichier dans votre navigateur. GitHub reçoit votre adresse IP à chaque requête. La comparaison des versions et des dates se fait sur votre appareil. Vous pouvez désactiver la recherche automatique dans **Réglages → Mises à jour**. La version Android utilise les mises à jour du Play Store.
 
 ### Ce qui est enregistré sur votre appareil
 - `config.json` : vos réglages (affectation des touches, derniers appareils connectés, options d'affichage).
@@ -59,8 +59,8 @@ To work, ShiftBridge reads and relays in real time, on your device:
 
 This information is passed **only to the training app you chose** (TrainingPeaks Virtual, Les jeux du cycle), over Bluetooth or your local network (OpenBikeControl, DirCon). It never leaves for the Internet. What that app does with it is governed by its own policy.
 
-### Updates (Windows only)
-The Windows version checks for a new ShiftBridge release at startup, then once a day, by querying GitHub's public API (`api.github.com`); if you choose to update, the new file is downloaded from `github.com`. Like any Internet request, it reveals your IP address to GitHub and states the app version; no other data (devices, settings, measurements) is sent, and nothing is transmitted to the developer. You can turn it off in **Settings → Updates**. The Android version is updated by the Play Store and makes no such request.
+### Updates (Windows and macOS)
+The Windows and macOS versions check for a new ShiftBridge release at startup and once a day using GitHub's public API (`api.github.com`). Windows downloads the file from `github.com` if you choose to update. macOS shows a notification and lets you download the file in your browser. GitHub receives your IP address with each request. Version and date comparisons happen on your device. You can turn off automatic checks in **Settings → Updates**. The Android version uses Play Store updates.
 
 ### What is stored on your device
 - `config.json`: your settings (key mapping, last connected devices, display options).

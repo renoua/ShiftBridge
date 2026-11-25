@@ -127,6 +127,42 @@ public class LifecycleTests
     }
 
     [Fact]
+    public async Task A_saved_uuid_controller_reconnects_with_its_custom_name_and_can_be_forgotten()
+    {
+        const string uuid = "af8261aa-5d30-4875-ba57-279a823a65bb";
+        var id = new BleDeviceId(Guid.Parse(uuid));
+        string path = Path.Combine(Path.GetTempPath(), $"shiftbridge-test-{Guid.NewGuid():N}.json");
+        try
+        {
+            var config = new AppConfig { KnownDevices = [id.ToString()], DeviceNames = new() { [id.ToString()] = "Left hood" } };
+            ConfigStore.Save(config, path);
+
+            var scanner = new FakeBleScanner();
+            var central = new FakeBleCentral { Connection = new FakeBleConnection(ZwiftService()) };
+            await using var bridge = new BridgeService(ConfigStore.Load(path), new FakeBlePlatform(scanner, central));
+            bridge.AutoConnectKnown();
+            bridge.StartScan();
+            var adv = ClickAdvert() with { Address = id };
+            scanner.Emit(adv);
+            await WaitFor(() => bridge.Controllers.Any(c => c.State == ControllerState.Connected));
+
+            var device = Assert.Single(bridge.SeenDevices);
+            Assert.Equal(uuid, device.AddressText);
+            Assert.Equal(id, Assert.Single(central.Requests).Address);
+            Assert.Equal("Left hood", bridge.DisplayName(device));
+            bridge.SetDeviceName(device.AddressText, "Right hood");
+            Assert.Equal("Right hood", bridge.DisplayName(device));
+
+            await bridge.DisconnectAsync(id, forget: true);
+            scanner.Emit(adv);
+            Assert.Empty(bridge.Controllers);
+            Assert.Empty(bridge.Config.KnownDevices);
+            Assert.Null(bridge.CustomName(uuid));
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
     public async Task Scan_stops_once_known_controllers_are_connected_and_restarts_when_one_is_lost()
     {
         var scanner = new FakeBleScanner();

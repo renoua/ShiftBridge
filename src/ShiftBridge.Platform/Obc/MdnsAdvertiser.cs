@@ -6,7 +6,7 @@ using Makaretu.Dns;
 namespace ShiftBridge.Platform.Obc;
 
 /// <summary>Annonce un service TCP sur le réseau local via mDNS (_openbikecontrol._tcp, _wahoo-fitness-tnp._tcp).</summary>
-public sealed class MdnsAdvertiser : IDisposable
+public sealed class MdnsAdvertiser : IMdnsAdvertiser
 {
     private MulticastService? _mdns;
     private ServiceDiscovery? _discovery;

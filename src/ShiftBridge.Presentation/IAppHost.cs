@@ -27,6 +27,10 @@ public interface IAppHost
 
     /// <summary>Affiche la demande système d'activation du Bluetooth. La reprise passe par <c>MainViewModel.OnBluetoothTurnedOn</c>.</summary>
     void RequestBluetoothOn() { }
+    bool PromptForBluetoothOnAutomatically => true;
+
+    void OpenLocalNetworkSettings() { }
+    void OpenReleaseDownloads() { }
 
     /// <summary>Appareil connecté à un réseau local (Wi-Fi ou Ethernet) ? Toujours vrai là où l'hôte ne peut pas le savoir.</summary>
     bool IsWifiOn => true;
@@ -45,6 +49,9 @@ public interface IAppHost
 
     /// <summary>Mise à jour intégrée ; null là où l'application est mise à jour par une boutique (Android).</summary>
     IAppUpdater? Updater => null;
+
+    /// <summary>Recherche de mises à jour, y compris pour les hôtes qui laissent l'installation à l'utilisateur.</summary>
+    IAppUpdateChecker? UpdateChecker => Updater;
 
     /// <summary>Ouvre une adresse https dans le navigateur par défaut ; ne lève jamais d'exception.</summary>
     void OpenUrl(string url) { }

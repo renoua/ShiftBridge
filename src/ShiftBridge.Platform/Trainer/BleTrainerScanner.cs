@@ -5,9 +5,9 @@ using ShiftBridge.Platform.Ble;
 
 namespace ShiftBridge.Platform.Trainer;
 
-public sealed record DiscoveredBleTrainer(ulong Address, string Name, short Rssi, TrainerProtocols Protocols)
+public sealed record DiscoveredBleTrainer(BleDeviceId Address, string Name, short Rssi, TrainerProtocols Protocols)
 {
-    public string AddressText => BleAddress.ToText(Address);
+    public string AddressText => Address.ToString();
 
     public string ProtocolText =>
         Protocols == TrainerProtocols.None ? Strings.Proto_ToCheck
@@ -30,7 +30,7 @@ public sealed class BleTrainerScanner(BleAdvertisementHub hub) : IDisposable
 {
     private sealed class Seen { public string Name = ""; public TrainerProtocols Protocols; public bool Excluded; public short Rssi; }
 
-    private readonly Dictionary<ulong, Seen> _seen = [];
+    private readonly Dictionary<BleDeviceId, Seen> _seen = [];
     private IDisposable? _subscription;
 
     public bool IsScanning => _subscription is not null;

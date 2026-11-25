@@ -3,6 +3,8 @@ obj/
 publish/
 *.user
 .vs/
+/.dotnet/
+/.nuget/packages/
 publish-*/
 apk/
 *.apk

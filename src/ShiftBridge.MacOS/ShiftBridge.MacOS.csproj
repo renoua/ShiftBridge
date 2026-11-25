@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-macos</TargetFramework>
+    <RuntimeIdentifier>osx-arm64</RuntimeIdentifier>
+    <SupportedOSPlatformVersion>13.0</SupportedOSPlatformVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ShiftBridge</AssemblyName>
+    <RootNamespace>ShiftBridge.MacOS</RootNamespace>
+    <Version>0.21.0</Version>
+    <ApplicationId>com.antoinerenou.shiftbridge</ApplicationId>
+    <ApplicationTitle>ShiftBridge</ApplicationTitle>
+    <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
+    <ApplicationVersion>2100</ApplicationVersion>
+    <CreatePackage>false</CreatePackage>
+    <TrimMode>copy</TrimMode>
+    <SatelliteResourceLanguages>en;fr</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../ShiftBridge.Desktop/ShiftBridge.Desktop.csproj" />
+    <ProjectReference Include="../ShiftBridge.Platform.MacOS/ShiftBridge.Platform.MacOS.csproj" />
+    <BundleResource Include="ShiftBridge.icns" />
+    <BundleResource Include="fr.lproj/InfoPlist.strings" />
+  </ItemGroup>
+</Project>

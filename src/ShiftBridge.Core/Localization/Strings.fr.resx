@@ -647,4 +647,10 @@
   <data name="Insp_Services" xml:space="preserve"><value>services</value></data>
   <data name="Insp_Manufacturer" xml:space="preserve"><value>fab</value></data>
   <data name="Insp_ServiceData" xml:space="preserve"><value>données</value></data>
+  <data name="Mac_BluetoothDenied" xml:space="preserve"><value>Autorisez ShiftBridge dans Réglages Système → Confidentialité et sécurité → Bluetooth, puis relancez l’application.</value></data>
+  <data name="Mac_BleTimeout" xml:space="preserve"><value>L’opération Bluetooth a expiré.</value></data>
+  <data name="Mac_BleConnectionBusy" xml:space="preserve"><value>Une connexion Bluetooth à {0} est déjà active ou en cours de fermeture.</value></data>
+  <data name="Mac_BleCharacteristicMissing" xml:space="preserve"><value>La caractéristique Bluetooth {0} est indisponible.</value></data>
+  <data name="Mac_LocalNetworkSettings" xml:space="preserve"><value>Réglages du réseau local</value></data>
+  <data name="Mac_ReleaseDownloads" xml:space="preserve"><value>Téléchargements des versions</value></data>
 </root>

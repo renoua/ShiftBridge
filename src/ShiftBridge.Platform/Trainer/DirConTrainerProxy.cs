@@ -27,7 +27,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     private readonly IReadOnlyDictionary<string, string>? _txtTemplate;
     private readonly string _name;
     private readonly GattRelayPolicy _policy;
-    private readonly MdnsAdvertiser _mdns = new();
+    private readonly IMdnsAdvertiser _mdns;
     private readonly List<Client> _clients = [];
     private readonly object _lock = new();
     private readonly object _state = new(); // protège _lastSpeedMs, _appSim, _speedWarned, _readCache
@@ -50,8 +50,9 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
 
     public DirConTrainerProxy(ITrainerLink upstream, VirtualShiftingModel model,
         IReadOnlyDictionary<string, string>? txtTemplate = null, string name = "ShiftBridge Trainer",
-        GattRelayPolicy? policy = null, string trainerLabel = "Trainer", string transportLabel = "?")
+        GattRelayPolicy? policy = null, string trainerLabel = "Trainer", string transportLabel = "?", IMdnsAdvertiser? mdns = null)
     {
+        _mdns = mdns ?? new MdnsAdvertiser();
         _upstream = upstream;
         _model = model;
         _txtTemplate = txtTemplate;

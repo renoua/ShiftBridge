@@ -6,7 +6,7 @@ namespace ShiftBridge.Core.Updates;
 /// <param name="Sha256">Empreinte SHA-256 en hexadécimal minuscule ; null si la release ne la fournit pas (mise à jour en un clic impossible).</param>
 public sealed record UpdateInfo(Version Version, string PageUrl, string DownloadUrl, long Size, string? Sha256);
 
-/// <summary>Lit la réponse de <c>GET /repos/{owner}/{repo}/releases/latest</c> de l'API GitHub.</summary>
+/// <summary>Lit les versions publiées par l'API GitHub Releases.</summary>
 public static class ReleaseParser
 {
     public const string DefaultAssetName = "ShiftBridge.exe";
@@ -20,28 +20,53 @@ public static class ReleaseParser
         try
         {
             using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) return null;
-            if (Bool(root, "draft") || Bool(root, "prerelease")) return null;
-
-            string? tag = Str(root, "tag_name");
-            if (tag is null) return null;
-            if (!Version.TryParse(tag.TrimStart('v', 'V'), out var version)) return null;
-            if (Normalize(version) <= Normalize(current)) return null;
-
-            string pageUrl = Str(root, "html_url") ?? "";
-            if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array) return null;
-            foreach (var asset in assets.EnumerateArray())
-            {
-                if (!string.Equals(Str(asset, "name"), assetName, StringComparison.OrdinalIgnoreCase)) continue;
-                string? url = Str(asset, "browser_download_url");
-                if (url is null || !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && !IsLoopbackHttp(url)) return null;
-                long size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out long n) ? n : 0;
-                return new UpdateInfo(version, pageUrl, url, size, ParseDigest(Str(asset, "digest")));
-            }
-            return null;
+            return ParseRelease(doc.RootElement, current, assetName);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException) { return null; }
+    }
+
+    /// <summary>Cherche sur une page de versions stables un fichier publié après la date de l'exécutable.</summary>
+    public static UpdateInfo? ParseReleases(string json, Version current, string assetName, DateTimeOffset executableTimestamp)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+
+            UpdateInfo? newest = null;
+            foreach (var release in doc.RootElement.EnumerateArray())
+            {
+                var update = ParseRelease(release, current, assetName, executableTimestamp);
+                if (update is not null && (newest is null || Normalize(update.Version) > Normalize(newest.Version)))
+                    newest = update;
+            }
+            return newest;
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException) { return null; }
+    }
+
+    private static UpdateInfo? ParseRelease(JsonElement release, Version current, string assetName,
+        DateTimeOffset? executableTimestamp = null)
+    {
+        if (release.ValueKind != JsonValueKind.Object || Bool(release, "draft") || Bool(release, "prerelease")) return null;
+        string? tag = Str(release, "tag_name");
+        if (tag is null || !Version.TryParse(tag.TrimStart('v', 'V'), out var version)) return null;
+        if (Normalize(version) <= Normalize(current)) return null;
+
+        string pageUrl = Str(release, "html_url") ?? "";
+        if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array) return null;
+        foreach (var asset in assets.EnumerateArray())
+        {
+            if (!string.Equals(Str(asset, "name"), assetName, StringComparison.OrdinalIgnoreCase)) continue;
+            if (executableTimestamp is { } timestamp && (!asset.TryGetProperty("created_at", out var date)
+                || date.ValueKind != JsonValueKind.String || !date.TryGetDateTimeOffset(out var uploadedAt) || uploadedAt <= timestamp)) continue;
+
+            string? url = Str(asset, "browser_download_url");
+            if (url is null || !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && !IsLoopbackHttp(url)) return null;
+            long size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out long n) ? n : 0;
+            return new UpdateInfo(version, pageUrl, url, size, ParseDigest(Str(asset, "digest")));
+        }
+        return null;
     }
 
     /// <summary>« sha256:ABC… » → « abc… » ; null si le format n'est pas celui d'un SHA-256 (64 caractères hexadécimaux).</summary>

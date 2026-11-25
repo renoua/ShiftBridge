@@ -9,9 +9,10 @@ namespace ShiftBridge.Platform.Windows;
 
 internal sealed class WinBleCentral : IBleCentral
 {
-    public async Task<IBleConnection> ConnectAsync(ulong address, BleConnectOptions options, CancellationToken ct = default)
+    public async Task<IBleConnection> ConnectAsync(BleDeviceId address, BleConnectOptions options, CancellationToken ct = default)
     {
-        var device = await WinBleConnection.With(BluetoothLEDevice.FromBluetoothAddressAsync(address).AsTask(ct),
+        if (address.MacAddress is not { } mac) throw new BleDeviceNotFoundException(Strings.Err_BtBadAddress);
+        var device = await WinBleConnection.With(BluetoothLEDevice.FromBluetoothAddressAsync(mac).AsTask(ct),
             options.OperationTimeout, "ouverture de l'appareil");
         if (device is null) throw new BleDeviceNotFoundException(Strings.Err_BleDeviceNotFound);
 

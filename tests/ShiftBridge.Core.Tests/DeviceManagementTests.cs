@@ -69,6 +69,32 @@ public class DeviceManagementTests
         Assert.Equal("ok", config.DeviceNames["C"]);
     }
 
+    [Theory]
+    [InlineData("187723572702975", "AA:BB:CC:DD:EE:FF")]
+    [InlineData("af8261aa-5d30-4875-ba57-279a823a65bb", "af8261aa-5d30-4875-ba57-279a823a65bb")]
+    public void Saved_trainer_and_heart_rate_identifiers_keep_their_config_format(string saved, string display)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"shiftbridge-test-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, $$"""
+                {
+                  "TrainerBleAddress": "{{saved}}",
+                  "HeartRateBleAddress": "{{saved}}"
+                }
+                """);
+            var config = ConfigStore.Load(path);
+
+            Assert.True(BleDeviceId.TryParseSavedAddress(config.TrainerBleAddress, out var trainer));
+            Assert.True(BleDeviceId.TryParseSavedAddress(config.HeartRateBleAddress, out var sensor));
+            Assert.Equal(trainer, sensor);
+            Assert.Equal(display, trainer.ToString());
+            Assert.Equal(saved, trainer.ToSavedAddress());
+            Assert.Equal(saved, sensor.ToSavedAddress());
+        }
+        finally { File.Delete(path); }
+    }
+
     [Fact]
     public void Service_data_helper_handles_16_32_and_128_bit_uuids_and_ignores_others()
     {

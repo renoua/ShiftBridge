@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIconFile</key>
+    <string>ShiftBridge.icns</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>ShiftBridge uses Bluetooth to connect to your cycling controllers, trainer, and heart-rate sensor.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>ShiftBridge finds trainers and relays controls and cycling data to training apps on your local network.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_openbikecontrol._tcp</string>
+        <string>_wahoo-fitness-tnp._tcp</string>
+    </array>
+</dict>
+</plist>

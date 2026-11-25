@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:ShiftBridge.Core.Localization"
+             xmlns:vm="using:ShiftBridge.Presentation"
+             x:Class="ShiftBridge.Desktop.Views.DiagnosticsView" x:DataType="vm:MainViewModel">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10" Margin="0,18,0,24">
+    <StackPanel Spacing="4">
+      <TextBlock Classes="title" Text="{x:Static loc:Strings.Nav_Diagnostic}" />
+      <TextBlock Classes="detail" Text="{x:Static loc:Strings.Diag_Intro}" />
+    </StackPanel>
+    <WrapPanel Grid.Row="1">
+      <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Diag_Copy}" Command="{Binding CopyLogCommand}" />
+      <Button Margin="0,0,12,0" Content="{x:Static loc:Strings.Diag_Clear}" Command="{Binding ClearLogCommand}" />
+      <CheckBox Content="{x:Static loc:Strings.Diag_Verbose}" IsChecked="{Binding VerboseFrames}" />
+    </WrapPanel>
+    <TextBox Grid.Row="2" Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+             FontFamily="Menlo,monospace" FontSize="12" TextWrapping="Wrap" AutomationProperties.Name="{x:Static loc:Strings.Nav_Diagnostic}" />
+    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+      <TextBox Text="{Binding NoteText}" PlaceholderText="{x:Static loc:Strings.Diag_NotePlaceholder}" />
+      <Button Grid.Column="1" Content="{x:Static loc:Strings.Diag_Add}" Command="{Binding AddNoteCommand}" />
+    </Grid>
+  </Grid>
+</UserControl>

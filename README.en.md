@@ -48,6 +48,10 @@ At launch and then every 24 h, ShiftBridge checks the latest GitHub release. If 
 
 To publish: create the GitHub release with the file **`ShiftBridge.exe`** (exact name) and a `vX.Y.Z` tag. Pre-releases and drafts are ignored. To test without publishing: `SHIFTBRIDGE_UPDATE_FEED=http://localhost:8000/latest.json` replaces the API address.
 
+## macOS
+
+The Apple Silicon desktop app uses Bluetooth for devices and OpenBikeControl TCP or DirCon for training apps. See [macOS build, usage and packaging](docs/macos.md).
+
 ## Android
 
 Same logic as on Windows (same controllers, same keys, same virtual shifting), in an app for Android 8.0 (API 26) or newer phones and tablets. The core is shared with the Windows version: only Bluetooth access and the interface differ.

@@ -31,7 +31,7 @@ public static partial class ControllerCatalog
     {
         string name = (adv.LocalName ?? "").Trim();
         string upper = name.ToUpperInvariant();
-        string suffix = (adv.Address & 0xFFFF).ToString("X4");
+        string suffix = adv.Address.NameSuffix;
 
         if (WheeltopType(adv) is { } wheeltopType)
             return (ControllerKind.WheeltopEds, $"Wheeltop EDS {wheeltopType} {suffix}");

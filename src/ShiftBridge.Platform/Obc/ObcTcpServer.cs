@@ -14,14 +14,18 @@ public sealed class ObcTcpServer : IObcTransport
     public const int PreferredPort = 36867;
 
     private readonly string _deviceName;
-    private readonly MdnsAdvertiser _mdns = new();
+    private readonly IMdnsAdvertiser _mdns;
     private readonly List<ClientConn> _clients = [];
     private readonly object _lock = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private int? _battery;
 
-    public ObcTcpServer(string deviceName = "ShiftBridge") => _deviceName = deviceName;
+    public ObcTcpServer(string deviceName = "ShiftBridge", IMdnsAdvertiser? mdns = null)
+    {
+        _deviceName = deviceName;
+        _mdns = mdns ?? new MdnsAdvertiser();
+    }
 
     public string Name => "OBC réseau";
     public int Port { get; private set; }

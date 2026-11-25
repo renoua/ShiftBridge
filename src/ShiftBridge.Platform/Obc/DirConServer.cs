@@ -25,12 +25,14 @@ public sealed class DirConServer : IObcTransport
     private static readonly Guid ManufacturerName = Guid.Parse("00002a29-0000-1000-8000-00805f9b34fb");
     private static readonly Guid ModelNumber = Guid.Parse("00002a24-0000-1000-8000-00805f9b34fb");
 
-    private readonly MdnsAdvertiser _mdns = new();
+    private readonly IMdnsAdvertiser _mdns;
     private readonly List<Client> _clients = [];
     private readonly object _lock = new();
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private byte[] _lastButtonState = [ObcMessages.TypeButtonState];
+
+    public DirConServer(IMdnsAdvertiser? mdns = null) => _mdns = mdns ?? new MdnsAdvertiser();
 
     public string Name => "OBC DirCon";
     public int Port { get; private set; }

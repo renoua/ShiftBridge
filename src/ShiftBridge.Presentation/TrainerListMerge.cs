@@ -1,3 +1,4 @@
+using ShiftBridge.Platform.Ble;
 using System.Collections.ObjectModel;
 using ShiftBridge.Platform.Trainer;
 
@@ -17,7 +18,7 @@ public static class TrainerListMerge
     public static void Apply(ObservableCollection<DiscoveredBleTrainer> list, IEnumerable<DiscoveredBleTrainer> seen,
         IEnumerable<DiscoveredBleTrainer?> keep)
     {
-        var wanted = new Dictionary<ulong, DiscoveredBleTrainer>();
+        var wanted = new Dictionary<BleDeviceId, DiscoveredBleTrainer>();
         foreach (var k in keep) if (k is not null) wanted[k.Address] = k;
         foreach (var s in seen) wanted[s.Address] = s;
         var ordered = wanted.Values.OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(t => t.Address).ToList();
@@ -43,7 +44,7 @@ public static class TrainerListMerge
         }
     }
 
-    private static int IndexOf(ObservableCollection<DiscoveredBleTrainer> list, ulong address, int from)
+    private static int IndexOf(ObservableCollection<DiscoveredBleTrainer> list, BleDeviceId address, int from)
     {
         for (int i = from; i < list.Count; i++) if (list[i].Address == address) return i;
         return -1;

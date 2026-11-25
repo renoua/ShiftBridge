@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Net.Sockets;
 using ShiftBridge.Core.DirCon;
 using ShiftBridge.Core.Obc;
@@ -41,13 +42,13 @@ public class DirConServerTests
     private static async Task<DirConPacket> RequestAsync(NetworkStream s, DirConStreamParser parser, DirConPacket req, CancellationToken ct)
     {
         await s.WriteAsync(req.Encode(), ct);
-        var buf = new byte[1024];
-        while (true)
-        {
-            int n = await s.ReadAsync(buf, ct);
-            var p = parser.Feed(buf.AsSpan(0, n)).FirstOrDefault();
-            if (p is not null) return p;
-        }
+        // Read only the reply. The first notification may follow it in the same TCP segment.
+        var header = new byte[DirConPacket.HeaderSize];
+        await s.ReadExactlyAsync(header, ct);
+        var frame = new byte[header.Length + BinaryPrimitives.ReadUInt16BigEndian(header.AsSpan(4))];
+        header.CopyTo(frame, 0);
+        await s.ReadExactlyAsync(frame.AsMemory(header.Length), ct);
+        return Assert.Single(parser.Feed(frame));
     }
 
     [Fact]

@@ -647,4 +647,10 @@
   <data name="Insp_Services" xml:space="preserve"><value>services</value></data>
   <data name="Insp_Manufacturer" xml:space="preserve"><value>mfr</value></data>
   <data name="Insp_ServiceData" xml:space="preserve"><value>data</value></data>
+  <data name="Mac_BluetoothDenied" xml:space="preserve"><value>Allow ShiftBridge in System Settings → Privacy &amp; Security → Bluetooth, then reopen the app.</value></data>
+  <data name="Mac_BleTimeout" xml:space="preserve"><value>The Bluetooth operation timed out.</value></data>
+  <data name="Mac_BleConnectionBusy" xml:space="preserve"><value>A Bluetooth connection to {0} is already active or closing.</value></data>
+  <data name="Mac_BleCharacteristicMissing" xml:space="preserve"><value>Bluetooth characteristic {0} is unavailable.</value></data>
+  <data name="Mac_LocalNetworkSettings" xml:space="preserve"><value>Local Network settings</value></data>
+  <data name="Mac_ReleaseDownloads" xml:space="preserve"><value>Release downloads</value></data>
 </root>

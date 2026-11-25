@@ -15,7 +15,7 @@ public sealed class HeartRateSource : IAsyncDisposable
     private int _bpm;
     private int _hasBpm;
 
-    public HeartRateSource(IBleCentral central, ulong address, string name)
+    public HeartRateSource(IBleCentral central, BleDeviceId address, string name)
         : this(ct => ConnectBleAsync(central, address, name, ct), name) { }
 
     /// <summary>Fabrique de liaison libre (tests).</summary>
@@ -29,7 +29,7 @@ public sealed class HeartRateSource : IAsyncDisposable
         _link.Notification += OnNotification;
     }
 
-    private static async Task<ITrainerLink> ConnectBleAsync(IBleCentral central, ulong address, string name, CancellationToken ct)
+    private static async Task<ITrainerLink> ConnectBleAsync(IBleCentral central, BleDeviceId address, string name, CancellationToken ct)
     {
         var l = new BleTrainerLink(central, address, name);
         try { await l.ConnectAsync(ct); }

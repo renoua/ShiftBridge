@@ -8,13 +8,14 @@ namespace ShiftBridge.Platform.Android;
 
 internal sealed class AndroidBleCentral(Context context) : IBleCentral
 {
-    public async Task<IBleConnection> ConnectAsync(ulong address, BleConnectOptions options, CancellationToken ct = default)
+    public async Task<IBleConnection> ConnectAsync(BleDeviceId address, BleConnectOptions options, CancellationToken ct = default)
     {
+        if (address.MacAddress is not { } mac) throw new BleDeviceNotFoundException(Strings.Err_BtBadAddress);
         var adapter = AndroidBle.Adapter(context);
         if (adapter is null || !adapter.IsEnabled) throw new IOException(Strings.Err_BtOff);
 
         BluetoothDevice? device;
-        try { device = adapter.GetRemoteDevice(BleAddress.ToText(address)); }
+        try { device = adapter.GetRemoteDevice(BleAddress.ToText(mac)); }
         catch (Java.Lang.IllegalArgumentException) { device = null; }
         if (device is null) throw new BleDeviceNotFoundException(Strings.Err_BtBadAddress);
 

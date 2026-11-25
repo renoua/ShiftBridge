@@ -8,7 +8,7 @@ namespace ShiftBridge.Platform.Ble;
 /// <param name="ServiceUuids">UUID de services annoncés (16/32 bits déjà étendus sur la base Bluetooth).</param>
 /// <param name="ServiceData">Données de service (type AD 0x16…), indexées par UUID étendu ; la valeur exclut l'UUID lui-même.</param>
 public sealed record BleAdvertisement(
-    ulong Address,
+    BleDeviceId Address,
     string? LocalName,
     short Rssi,
     IReadOnlyList<(ushort CompanyId, byte[] Data)> ManufacturerData,
@@ -81,7 +81,7 @@ public interface IBleConnection : IAsyncDisposable
 public interface IBleCentral
 {
     /// <exception cref="BleDeviceNotFoundException">Appareil introuvable.</exception>
-    Task<IBleConnection> ConnectAsync(ulong address, BleConnectOptions options, CancellationToken ct = default);
+    Task<IBleConnection> ConnectAsync(BleDeviceId address, BleConnectOptions options, CancellationToken ct = default);
 }
 
 /// <summary>Point d'entrée unique de la plateforme (Windows, Android…), injecté dans <see cref="BridgeService"/>.</summary>
@@ -107,7 +107,7 @@ public sealed class NullBlePlatform : IBlePlatform
 
     private sealed class NullCentral : IBleCentral
     {
-        public Task<IBleConnection> ConnectAsync(ulong address, BleConnectOptions options, CancellationToken ct = default) =>
+        public Task<IBleConnection> ConnectAsync(BleDeviceId address, BleConnectOptions options, CancellationToken ct = default) =>
             throw new BleDeviceNotFoundException(Strings.Err_BleUnavailablePlatform);
     }
 

@@ -18,7 +18,7 @@ internal sealed class FakeBleScanner : IBleScanner
     public void Emit(BleAdvertisement adv) => Received?.Invoke(adv);
     public void StopByItself(string reason) { IsRunning = false; Stopped?.Invoke(reason); }
 
-    public static BleAdvertisement Adv(ulong address, string? name = null, short rssi = -60,
+    public static BleAdvertisement Adv(BleDeviceId address, string? name = null, short rssi = -60,
         (ushort CompanyId, byte[] Data)[]? manufacturer = null, Guid[]? services = null,
         Dictionary<Guid, byte[]>? serviceData = null) =>
         new(address, name, rssi, manufacturer ?? [], services ?? [], serviceData ?? []);
@@ -89,9 +89,9 @@ internal sealed class FakeBlePlatform(FakeBleScanner scanner, FakeBleCentral cen
 internal sealed class FakeBleCentral : IBleCentral
 {
     public FakeBleConnection? Connection { get; set; }
-    public List<(ulong Address, BleConnectOptions Options)> Requests { get; } = [];
+    public List<(BleDeviceId Address, BleConnectOptions Options)> Requests { get; } = [];
 
-    public Task<IBleConnection> ConnectAsync(ulong address, BleConnectOptions options, CancellationToken ct = default)
+    public Task<IBleConnection> ConnectAsync(BleDeviceId address, BleConnectOptions options, CancellationToken ct = default)
     {
         Requests.Add((address, options));
         if (Connection is null) throw new BleDeviceNotFoundException("introuvable");

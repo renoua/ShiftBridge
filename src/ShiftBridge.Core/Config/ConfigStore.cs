@@ -23,7 +23,7 @@ public sealed class AppConfig
     public bool MinimizeToTray { get; set; }
     /// <summary>Windows : lance ShiftBridge à l'ouverture de session (valeur « Run » du registre, avec --minimized).</summary>
     public bool StartWithWindows { get; set; }
-    /// <summary>Windows : cherche une nouvelle version sur GitHub Releases au lancement, puis toutes les 24 h.</summary>
+    /// <summary>Recherche sur GitHub Releases au lancement, puis toutes les 24 h, si l'hôte le permet.</summary>
     public bool CheckForUpdates { get; set; } = true;
     /// <summary>Obsolète depuis 0.15 (les sections « Avancé » se replient page par page) : conservé pour que les anciens config.json restent lisibles.</summary>
     public bool ShowAdvanced { get; set; }

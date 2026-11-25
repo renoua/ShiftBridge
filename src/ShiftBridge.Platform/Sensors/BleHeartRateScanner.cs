@@ -3,9 +3,9 @@ using ShiftBridge.Platform.Ble;
 
 namespace ShiftBridge.Platform.Sensors;
 
-public sealed record DiscoveredHeartRateSensor(ulong Address, string Name, short Rssi)
+public sealed record DiscoveredHeartRateSensor(BleDeviceId Address, string Name, short Rssi)
 {
-    public string AddressText => BleAddress.ToText(Address);
+    public string AddressText => Address.ToString();
     public override string ToString() => $"{Name}  ·  {Rssi} dBm";
 }
 
@@ -14,7 +14,7 @@ public sealed class BleHeartRateScanner(BleAdvertisementHub hub) : IDisposable
 {
     private sealed class Seen { public string Name = ""; public bool IsHr; public short Rssi; }
 
-    private readonly Dictionary<ulong, Seen> _seen = [];
+    private readonly Dictionary<BleDeviceId, Seen> _seen = [];
     private IDisposable? _subscription;
 
     public bool IsScanning => _subscription is not null;

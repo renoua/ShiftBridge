@@ -1,0 +1,2 @@
+"NSBluetoothAlwaysUsageDescription" = "ShiftBridge utilise le Bluetooth pour se connecter à vos manettes, à votre home-trainer et à votre capteur de fréquence cardiaque.";
+"NSLocalNetworkUsageDescription" = "ShiftBridge détecte les home-trainers et transmet les commandes et les données de cyclisme aux applications sur votre réseau local.";
