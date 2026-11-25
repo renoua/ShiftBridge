@@ -1,0 +1,70 @@
+# Build macOS uniquement : Windows et Android restent compilés en local (voir README).
+# Une release publiée (gh release create vX.Y.Z …) déclenche la compilation du DMG, qui est ajouté à cette même release
+# sous le nom attendu par la recherche de mises à jour Mac : ShiftBridge-macos-arm64.dmg.
+# Sans compte Apple Developer, le DMG n'est signé qu'ad hoc (pas notarisé) : au premier lancement, clic droit → Ouvrir.
+name: macos
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release à compléter (ex. v0.23.0) ; vide = simple artefact"
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG || github.ref }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Xcode le plus récent
+        run: |
+          xcode="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          echo "Xcode : $xcode"
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      - name: Workload macOS
+        run: dotnet workload install macos
+
+      - name: Tests
+        run: dotnet test tests/ShiftBridge.Core.Tests -c Release
+
+      # ValidateXcodeVersion=false : le workload exige une version d'Xcode précise, celle du runner peut différer d'un cran.
+      - name: Compilation
+        run: dotnet build src/ShiftBridge.MacOS/ShiftBridge.MacOS.csproj -c Release -p:ValidateXcodeVersion=false
+
+      - name: DMG
+        run: |
+          app="src/ShiftBridge.MacOS/bin/Release/net10.0-macos/osx-arm64/ShiftBridge.app"
+          codesign --force --deep --sign - "$app"
+          codesign --verify --deep --strict "$app"
+          mkdir -p dmg-root out
+          cp -R "$app" dmg-root/
+          ln -s /Applications dmg-root/Applications
+          hdiutil create -volname ShiftBridge -srcfolder dmg-root -ov -format UDZO out/ShiftBridge-macos-arm64.dmg
+          hdiutil verify out/ShiftBridge-macos-arm64.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ShiftBridge-macos-arm64
+          path: out/ShiftBridge-macos-arm64.dmg
+
+      - name: Ajout à la release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" out/ShiftBridge-macos-arm64.dmg --clobber --repo "$GITHUB_REPOSITORY"
