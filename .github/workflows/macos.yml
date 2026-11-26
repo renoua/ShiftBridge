@@ -38,7 +38,10 @@ jobs:
       # On prend donc l'Xcode X.Y le plus récent, sinon le plus proche inférieur, sinon celui par défaut du runner.
       - name: Xcode correspondant au workload
         run: |
-          pack="$(ls -d "${DOTNET_ROOT:-$HOME/.dotnet}"/packs/Microsoft.macOS.Sdk.*_* | sort -V | tail -1)"
+          # Le runner peut contenir des packs d'autres versions de .NET (ex. net11.0_27.2) : on ne garde que celui du projet.
+          tfm="$(sed -n 's|.*<TargetFramework>\(net[0-9.]*\)-macos</TargetFramework>.*|\1|p' src/ShiftBridge.MacOS/ShiftBridge.MacOS.csproj)"
+          pack="$(ls -d "${DOTNET_ROOT:-$HOME/.dotnet}"/packs/Microsoft.macOS.Sdk."$tfm"_* | sort -V | tail -1)"
+          [ -n "$tfm" ] && [ -n "$pack" ] || { echo "::error::Pack Microsoft.macOS.Sdk introuvable pour '$tfm'"; exit 1; }
           want="${pack##*_}"
           echo "Pack : $pack → Xcode $want attendu"
           echo "Xcode disponibles :"; ls -d /Applications/Xcode_*.app
