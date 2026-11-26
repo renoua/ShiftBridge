@@ -13,6 +13,12 @@ public interface IObcTransport : IAsyncDisposable
     /// <summary>Dernier App Info reçu (null si aucune appli ne l'a envoyé).</summary>
     ObcAppInfo? CurrentAppInfo { get; }
 
+    /// <summary>
+    /// Nom sous lequel l'appli d'entraînement voit ce transport, quand ce n'est pas « ShiftBridge » (null sinon). En Bluetooth,
+    /// Windows et Android annoncent le nom Bluetooth de l'appareil (« DESKTOP-AB12 », « Galaxy S21 »…) : l'utilisateur doit le savoir.
+    /// </summary>
+    string? AdvertisedName => null;
+
     event Action<ObcAppInfo>? AppInfoReceived;
     event Action<ObcHaptic>? HapticReceived;
     event Action? ClientsChanged;

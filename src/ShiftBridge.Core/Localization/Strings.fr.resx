@@ -146,6 +146,7 @@
   <data name="App_Connected" xml:space="preserve"><value>Application connectée</value></data>
   <data name="App_ViaTrainer" xml:space="preserve"><value>via ShiftBridge Trainer</value></data>
   <data name="App_ChooseShiftBridge" xml:space="preserve"><value>Choisissez ShiftBridge dans votre appli</value></data>
+  <data name="App_ChooseBleName" xml:space="preserve"><value>Dans votre appli, choisissez « {0} » (nom Bluetooth de cet appareil)</value></data>
   <data name="Step_1" xml:space="preserve"><value>Étape 1 sur 3 : allumez vos manettes Zwift et connectez-les.</value></data>
   <data name="Step_2Trainer" xml:space="preserve"><value>Étape 2 sur 3 : choisissez votre trainer pour appliquer les vitesses virtuelles.</value></data>
   <data name="Step_2Enable" xml:space="preserve"><value>Étape 2 sur 3 : activez le virtual shifting (bouton ci-dessus).</value></data>
@@ -271,10 +272,10 @@
   <data name="Err_ControllerNotFound" xml:space="preserve"><value>Manette introuvable (éteinte ou déjà connectée ailleurs ?)</value></data>
   <data name="Err_ZwiftCharsMissing" xml:space="preserve"><value>Caractéristiques Zwift manquantes</value></data>
   <data name="Err_ControllerServiceMissing" xml:space="preserve"><value>Service attendu absent : cet appareil n'est pas reconnu comme ce modèle</value></data>
-  <data name="Ctl_axs_Up" xml:space="preserve"><value>Pignon arrière : vitesse +</value></data>
-  <data name="Ctl_axs_Down" xml:space="preserve"><value>Pignon arrière : vitesse −</value></data>
+  <data name="Ctl_axs_Up" xml:space="preserve"><value>Pignon plus petit (levier droit en général)</value></data>
+  <data name="Ctl_axs_Down" xml:space="preserve"><value>Pignon plus grand (levier gauche en général)</value></data>
   <data name="Axs_AdvancedLabel" xml:space="preserve"><value>SRAM AXS : mode avancé (expérimental)</value></data>
-  <data name="Axs_AdvancedHint" xml:space="preserve"><value>Appaire le dérailleur et lit son pignon pour connaître le sens de chaque changement (le levier utilisé reste inconnu). L&apos;appairage change la clé du dérailleur : l&apos;appli SRAM devra se reconnecter. Maintenez le bouton AXS du dérailleur jusqu&apos;au clignotement, puis choisissez Appairer. Appliqué à la prochaine connexion.</value></data>
+  <data name="Axs_AdvancedHint" xml:space="preserve"><value>Appaire le dérailleur et lit son pignon pour connaître le sens de chaque changement (le levier utilisé reste inconnu). L&apos;appairage change la clé du dérailleur : l&apos;appli SRAM devra se reconnecter. Maintenez le bouton AXS du dérailleur jusqu&apos;au clignotement, puis choisissez Appairer. Appliqué à la prochaine connexion. En mode avancé, la page Touches propose « pignon plus petit / plus grand » (en général levier droit / gauche) ; rien n&apos;est émis quand le dérailleur est déjà en bout de cassette.</value></data>
   <data name="Dev_Pair" xml:space="preserve"><value>Appairer</value></data>
   <data name="Model_ShimanoDi2" xml:space="preserve"><value>Shimano Di2</value></data>
   <data name="Model_SramAxs" xml:space="preserve"><value>SRAM AXS / eTap</value></data>
@@ -288,8 +289,8 @@
   <data name="Ctl_di2_Ch2" xml:space="preserve"><value>Canal D-Fly 2</value></data>
   <data name="Ctl_di2_Ch3" xml:space="preserve"><value>Canal D-Fly 3</value></data>
   <data name="Ctl_di2_Ch4" xml:space="preserve"><value>Canal D-Fly 4</value></data>
-  <data name="Ctl_axs_Single" xml:space="preserve"><value>Levier : appui simple</value></data>
-  <data name="Ctl_axs_Double" xml:space="preserve"><value>Levier : double appui</value></data>
+  <data name="Ctl_axs_Single" xml:space="preserve"><value>Levier (gauche ou droit) : un appui</value></data>
+  <data name="Ctl_axs_Double" xml:space="preserve"><value>Levier (gauche ou droit) : deux appuis rapprochés</value></data>
   <data name="Ctl_kickr_RightUp" xml:space="preserve"><value>Droite : haut</value></data>
   <data name="Ctl_kickr_RightDown" xml:space="preserve"><value>Droite : bas</value></data>
   <data name="Ctl_kickr_RightSteer" xml:space="preserve"><value>Droite : direction</value></data>

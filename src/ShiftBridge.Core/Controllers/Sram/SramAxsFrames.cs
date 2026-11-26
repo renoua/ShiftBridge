@@ -31,6 +31,13 @@ public static class SramAxsFrames
         return null;
     }
 
+    /// <summary>
+    /// Tous les champs entiers d'une trame déchiffrée (« 20=1 21=7 22=0 »), pour le diagnostic : sert à repérer un champ qui
+    /// distinguerait le levier gauche du droit. Vide si la trame n'en contient aucun.
+    /// </summary>
+    public static string DescribeFields(byte[] plaintext) =>
+        string.Join(" ", Varints(plaintext).Select(f => $"{f.Field}={f.Value}"));
+
     /// <summary>Champs varint (type de fil 0) d'un message protobuf ; les autres types sont sautés, un message tronqué s'arrête.</summary>
     private static IEnumerable<(int Field, ulong Value)> Varints(byte[] data)
     {

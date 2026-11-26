@@ -24,6 +24,13 @@ public sealed class ObcBlePeripheral : IObcTransport
     public string Name => "OBC Bluetooth";
     public bool HasClient => _buttonState?.SubscribedClients.Count > 0;
     public ObcAppInfo? CurrentAppInfo { get; private set; }
+    public string? AdvertisedName { get; private set; }
+
+    private static string? LocalBluetoothName()
+    {
+        try { return System.Net.Dns.GetHostName(); }
+        catch { return string.IsNullOrWhiteSpace(Environment.MachineName) ? null : Environment.MachineName; }
+    }
 
     public event Action<ObcAppInfo>? AppInfoReceived;
     public event Action<ObcHaptic>? HapticReceived;
@@ -76,7 +83,9 @@ public sealed class ObcBlePeripheral : IObcTransport
         var adv = new GattServiceProviderAdvertisingParameters { IsDiscoverable = true, IsConnectable = true };
         _obc.StartAdvertising(adv);
         _battery?.StartAdvertising(adv);
-        Log?.Invoke("OBC BLE : annonce du service d273f680 démarrée");
+        // GattServiceProvider ne permet pas de choisir le nom annoncé : c'est le nom Bluetooth du PC, c'est-à-dire son nom d'hôte.
+        AdvertisedName = LocalBluetoothName();
+        Log?.Invoke($"OBC BLE : annonce du service d273f680 démarrée, sous le nom « {AdvertisedName ?? "?"} »");
     }
 
     private static async Task<GattLocalCharacteristic> CreateAsync(GattServiceProvider sp, Guid uuid, GattCharacteristicProperties props)
@@ -93,6 +102,7 @@ public sealed class ObcBlePeripheral : IObcTransport
         _obc = null; _battery = null; _buttonState = null; _batteryLevel = null;
         _parsers.Clear();
         CurrentAppInfo = null;
+        AdvertisedName = null;
         ClientsChanged?.Invoke();
         return Task.CompletedTask;
     }

@@ -39,6 +39,8 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
     public string Name => "OBC Bluetooth";
     public bool HasClient { get { lock (_lock) return _buttonSubscribers.Count > 0; } }
     public ObcAppInfo? CurrentAppInfo { get; private set; }
+    /// <summary>Nom Bluetooth du téléphone, placé dans la réponse de scan : c'est lui que l'appli d'entraînement affiche.</summary>
+    public string? AdvertisedName { get; private set; }
 
     public event Action<ObcAppInfo>? AppInfoReceived;
     public event Action<ObcHaptic>? HapticReceived;
@@ -79,7 +81,9 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
         catch (IOException ex) { _batteryLevel = null; Log?.Invoke($"Service batterie ignoré : {ex.Message}"); }
 
         await StartAdvertisingAsync(ct);
-        Log?.Invoke("OBC BLE : annonce du service d273f680 démarrée");
+        try { AdvertisedName = AndroidBle.Adapter(context)?.Name; }
+        catch (Java.Lang.SecurityException) { AdvertisedName = null; }
+        Log?.Invoke($"OBC BLE : annonce du service d273f680 démarrée, sous le nom « {AdvertisedName ?? "?"} »");
     }
 
     private static BluetoothGattCharacteristic NewCharacteristic(Guid uuid, GattProperty props, GattPermission perms, bool withCccd = false)
@@ -134,6 +138,7 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
         _buttonState = null; _batteryLevel = null;
         lock (_lock) { _buttonSubscribers.Clear(); _batterySubscribers.Clear(); _parsers.Clear(); }
         CurrentAppInfo = null;
+        AdvertisedName = null;
         ClientsChanged?.Invoke();
         return Task.CompletedTask;
     }

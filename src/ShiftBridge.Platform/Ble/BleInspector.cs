@@ -69,19 +69,31 @@ public sealed class BleInspector(BleAdvertisementHub hub, IBleCentral central) :
         bool isNew = !_seen.ContainsKey(adv.Address);
         var s = _seen.GetOrAdd(adv.Address, _ => new Seen());
         bool changed;
+        string? trace = null;
         lock (s)
         {
-            string before = Describe(s) + s.Name;
+            string beforeData = Describe(s), beforeName = s.Name;
             if (!string.IsNullOrWhiteSpace(adv.LocalName)) s.Name = adv.LocalName!.Trim();
             s.Rssi = adv.Rssi;
             foreach (var u in adv.ServiceUuids) s.Services.Add(u);
             foreach (var (company, data) in adv.ManufacturerData) s.Manufacturer[company] = data;
             foreach (var (u, data) in adv.ServiceData) s.ServiceData[u] = data;
-            changed = before != Describe(s) + s.Name;
+            string afterData = Describe(s);
+            changed = beforeData != afterData || beforeName != s.Name;
+            if (beforeData != afterData && ShouldTraceAdvertisements(adv.Address, s.Name))
+                trace = $"{DateTime.Now:HH:mm:ss.fff} {(s.Name.Length > 0 ? s.Name : adv.Address.ToString())} annonce : {afterData}";
         }
+        if (trace is not null) Log?.Invoke(trace);
         // Les annonces arrivent plusieurs fois par seconde : l'interface n'est prévenue que d'un appareil nouveau ou plus informatif.
         if (isNew || changed) DevicesChanged?.Invoke();
     }
+
+    /// <summary>
+    /// Annonces dont chaque changement est journalisé avec l'heure : celles des composants SRAM (on cherche si un levier signale
+    /// ses appuis dans son annonce) et celle de l'appareil en cours de capture. Les autres rempliraient le journal pour rien.
+    /// </summary>
+    private bool ShouldTraceAdvertisements(BleDeviceId address, string name) =>
+        name.StartsWith("SRAM", StringComparison.OrdinalIgnoreCase) || (IsCapturing && address.Equals(CapturingAddress));
 
     private static string Describe(Seen s)
     {

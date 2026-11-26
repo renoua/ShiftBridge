@@ -37,6 +37,34 @@ public class SramAxsFramesTests
         Assert.False(SramAxsFrames.TryParseDrivetrain(H(hex), out _, out _));
 
     [Fact]
+    public void All_integer_fields_are_described_for_diagnostics()
+    {
+        // champ 2 (longueur variable) sauté, puis 20, 21 et 22 dans l'ordre de la trame
+        Assert.Equal("20=1 21=7 22=12", SramAxsFrames.DescribeFields(H("0a03aabbcc" + "a00101a80107b0010c")));
+        Assert.Equal("", SramAxsFrames.DescribeFields([]));
+        Assert.Equal("20=1", SramAxsFrames.DescribeFields(H("a00101a801")));   // tronqué : on garde ce qui précède
+    }
+
+    [Theory]
+    [InlineData(false, "Single", true)]
+    [InlineData(false, "Double", true)]
+    [InlineData(false, "Up", false)]
+    [InlineData(false, "Down", false)]
+    [InlineData(true, "Single", false)]
+    [InlineData(true, "Double", false)]
+    [InlineData(true, "Up", true)]
+    [InlineData(true, "Down", true)]
+    public void Buttons_page_only_lists_the_axs_keys_of_the_chosen_mode(bool advanced, string name, bool shown) =>
+        Assert.Equal(shown, ShiftBridge.Presentation.MainViewModel.IsAxsButtonForMode(name, advanced));
+
+    [Fact]
+    public void Every_axs_key_is_shown_in_exactly_one_mode()
+    {
+        foreach (var (name, _) in ControllerKind.SramAxs.Buttons())
+            Assert.True(ShiftBridge.Presentation.MainViewModel.IsAxsButtonForMode(name, false) ^ ShiftBridge.Presentation.MainViewModel.IsAxsButtonForMode(name, true), name);
+    }
+
+    [Fact]
     public void Gear_count_comes_from_field_24()
     {
         Assert.Equal(12, SramAxsFrames.TryParseGearCount(H("c0010c")));

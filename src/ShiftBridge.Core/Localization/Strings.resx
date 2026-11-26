@@ -146,6 +146,7 @@
   <data name="App_Connected" xml:space="preserve"><value>Application connected</value></data>
   <data name="App_ViaTrainer" xml:space="preserve"><value>via ShiftBridge Trainer</value></data>
   <data name="App_ChooseShiftBridge" xml:space="preserve"><value>Choose ShiftBridge in your app</value></data>
+  <data name="App_ChooseBleName" xml:space="preserve"><value>In your app, choose “{0}” (this device&apos;s Bluetooth name)</value></data>
   <data name="Step_1" xml:space="preserve"><value>Step 1 of 3: turn on your Zwift controllers and connect them.</value></data>
   <data name="Step_2Trainer" xml:space="preserve"><value>Step 2 of 3: choose your trainer to apply virtual gears.</value></data>
   <data name="Step_2Enable" xml:space="preserve"><value>Step 2 of 3: enable virtual shifting (button above).</value></data>
@@ -271,10 +272,10 @@
   <data name="Err_ControllerNotFound" xml:space="preserve"><value>Controller not found (turned off or already connected elsewhere?)</value></data>
   <data name="Err_ZwiftCharsMissing" xml:space="preserve"><value>Zwift characteristics missing</value></data>
   <data name="Err_ControllerServiceMissing" xml:space="preserve"><value>Expected service missing: this device is not recognised as this model</value></data>
-  <data name="Ctl_axs_Up" xml:space="preserve"><value>Rear cog: shift up</value></data>
-  <data name="Ctl_axs_Down" xml:space="preserve"><value>Rear cog: shift down</value></data>
+  <data name="Ctl_axs_Up" xml:space="preserve"><value>Smaller cog (usually right lever)</value></data>
+  <data name="Ctl_axs_Down" xml:space="preserve"><value>Larger cog (usually left lever)</value></data>
   <data name="Axs_AdvancedLabel" xml:space="preserve"><value>SRAM AXS: advanced mode (experimental)</value></data>
-  <data name="Axs_AdvancedHint" xml:space="preserve"><value>Pairs with the derailleur and reads its cog to know the direction of each shift (which lever was used stays unknown). Pairing changes the derailleur key: the SRAM app will have to reconnect. Hold the derailleur AXS button until it blinks, then choose Pair. Applied the next time it connects.</value></data>
+  <data name="Axs_AdvancedHint" xml:space="preserve"><value>Pairs with the derailleur and reads its cog to know the direction of each shift (which lever was used stays unknown). Pairing changes the derailleur key: the SRAM app will have to reconnect. Hold the derailleur AXS button until it blinks, then choose Pair. Applied the next time it connects. In advanced mode, the Buttons page shows “smaller cog / larger cog” (usually right / left lever); nothing is sent when the derailleur is already at the end of the cassette.</value></data>
   <data name="Dev_Pair" xml:space="preserve"><value>Pair</value></data>
   <data name="Model_ShimanoDi2" xml:space="preserve"><value>Shimano Di2</value></data>
   <data name="Model_SramAxs" xml:space="preserve"><value>SRAM AXS / eTap</value></data>
@@ -288,8 +289,8 @@
   <data name="Ctl_di2_Ch2" xml:space="preserve"><value>D-Fly channel 2</value></data>
   <data name="Ctl_di2_Ch3" xml:space="preserve"><value>D-Fly channel 3</value></data>
   <data name="Ctl_di2_Ch4" xml:space="preserve"><value>D-Fly channel 4</value></data>
-  <data name="Ctl_axs_Single" xml:space="preserve"><value>Lever: single tap</value></data>
-  <data name="Ctl_axs_Double" xml:space="preserve"><value>Lever: double tap</value></data>
+  <data name="Ctl_axs_Single" xml:space="preserve"><value>Lever (left or right): single press</value></data>
+  <data name="Ctl_axs_Double" xml:space="preserve"><value>Lever (left or right): double press</value></data>
   <data name="Ctl_kickr_RightUp" xml:space="preserve"><value>Right: up</value></data>
   <data name="Ctl_kickr_RightDown" xml:space="preserve"><value>Right: down</value></data>
   <data name="Ctl_kickr_RightSteer" xml:space="preserve"><value>Right: steer</value></data>

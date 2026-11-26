@@ -162,6 +162,7 @@ public sealed partial class MainViewModel : ObservableObject
         if (_loading) return;
         _config.SramAxsAdvanced = value;
         SaveConfig();
+        RefreshAxsRows();
     }
 
     [RelayCommand]
@@ -310,7 +311,7 @@ public sealed partial class MainViewModel : ObservableObject
         else
         {
             AppSummary = Strings.App_Waiting;
-            AppDetail = Strings.App_ChooseShiftBridge;
+            AppDetail = BleNameHint() ?? Strings.App_ChooseShiftBridge;
             AppState = transports.Any(t => t is not null) || _bridge.TrainerProxyActive ? UiState.Waiting : UiState.Off;
         }
 
@@ -679,6 +680,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (!_shownKinds.Add(kind)) continue;
             foreach (var (name, labelKey) in kind.Buttons())
             {
+                if (kind == ControllerKind.SramAxs && !IsAxsButtonForMode(name, _config.SramAxsAdvanced)) continue;
                 ButtonKey key = ButtonKey.Controller(kind, name);
                 var row = new ButtonRowViewModel(key, Loc.Get("Model_" + kind), Loc.Get(labelKey), null, Actions, ItemFor(key),
                     OnRowChanged, RepeatFor(key), TargetFor(key), StepsFor(key));
@@ -689,6 +691,22 @@ public sealed partial class MainViewModel : ObservableObject
         }
         if (added) RebuildButtonGroups();
         return added;
+    }
+
+    /// <summary>
+    /// Touches SRAM AXS réellement émises dans le mode choisi : simple/double appui en mode simple, pignon plus petit/plus grand
+    /// (Up/Down) en mode avancé. Afficher les autres ne ferait que des lignes qui ne réagissent jamais.
+    /// </summary>
+    public static bool IsAxsButtonForMode(string name, bool advanced) =>
+        advanced ? name is "Up" or "Down" : name is "Single" or "Double";
+
+    /// <summary>Reconstruit les lignes AXS après un changement de mode (les assignations du profil ne sont pas touchées).</summary>
+    private void RefreshAxsRows()
+    {
+        if (!_shownKinds.Remove(ControllerKind.SramAxs)) return;
+        foreach (var row in ButtonRows.Where(r => r.Button.TryAsController(out var k, out _) && k == ControllerKind.SramAxs).ToList())
+            RemoveRow(row);
+        if (!AddControllerRows()) RebuildButtonGroups();
     }
 
     private ActionItem? ItemFor(ButtonKey b)
@@ -1014,6 +1032,13 @@ public sealed partial class MainViewModel : ObservableObject
         SaveConfig();
     }
 
+    /// <summary>
+    /// « Choisissez “DESKTOP-AB12” » quand l'OBC Bluetooth est actif : Windows et Android annoncent le nom Bluetooth de l'appareil,
+    /// pas « ShiftBridge », et l'utilisateur ne le retrouverait pas dans la liste de son appli.
+    /// </summary>
+    private string? BleNameHint() =>
+        _ble?.AdvertisedName is { Length: > 0 } name ? Loc.Fmt(Strings.App_ChooseBleName, name) : null;
+
     /// <summary>L'adaptateur Bluetooth ne peut pas être périphérique : le statut « non disponible » ne doit pas être écrasé.</summary>
     private bool _bleUnavailable;
 
@@ -1029,7 +1054,8 @@ public sealed partial class MainViewModel : ObservableObject
         if (!EnableBle || _ble is not null || !_bleUnavailable)
         {
             _bleUnavailable = false;
-            BleStatus = Describe(_ble, Strings.Status_Off, Strings.Status_WaitingApp);
+            BleStatus = Describe(_ble, Strings.Status_Off,
+                BleNameHint() is { } hint ? $"{Strings.Status_WaitingApp} {hint}" : Strings.Status_WaitingApp);
         }
         NetworkStatus = _tcp is null
             ? Strings.Status_Off

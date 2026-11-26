@@ -351,6 +351,8 @@ public sealed class SramAxsAdvancedController : IController
             }
             return;
         }
+        // Diagnostic gauche/droite : tous les champs déchiffrés (jamais la clé). Le texte clair ne contient que l'état du dérailleur.
+        if (VerboseFrames) Frame?.Invoke($"{Info.Name} : {BleInspector.ShortUuid(characteristic)} champs {SramAxsFrames.DescribeFields(plain)}");
         if (!SramAxsFrames.TryParseDrivetrain(plain, out int rear, out int? front)) return;
         var taps = _tracker.Update(rear);
         if (VerboseFrames || taps.Count > 0) Frame?.Invoke($"{Info.Name} : pignon {rear}{(front is { } f ? $", plateau {f}" : "")}{(taps.Count > 0 ? $" → {string.Join(", ", taps)}" : "")}");
