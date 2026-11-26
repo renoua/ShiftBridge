@@ -78,6 +78,28 @@ public class GroupsetDecoderTests
     }
 
     [Fact]
+    public async Task Axs_taps_carry_the_raw_bytes_and_the_gap_for_the_log()
+    {
+        using var d = new SramAxsDecoder(doubleWindowMs: 300);
+        var got = new List<DecodedFrame>();
+        d.Deferred += f => { lock (got) got.Add(f); };
+
+        d.Decode(SramAxsDecoder.Trigger, [0xFF]);
+        await Task.Delay(500);
+        lock (got) Assert.Equal("FF", Assert.Single(got).Detail);
+
+        d.Decode(SramAxsDecoder.Trigger, [0xFF]);
+        await Task.Delay(50);
+        d.Decode(SramAxsDecoder.Trigger, [0x01, 0x02]);
+        lock (got)
+        {
+            Assert.Equal(2, got.Count);
+            Assert.Equal(["Double"], got[1].Taps); // les noms de touches ne changent pas : les assignations restent valables
+            Assert.Matches(@"^FF \+ 0102, écart \d+ ms$", got[1].Detail);
+        }
+    }
+
+    [Fact]
     public async Task Axs_ignores_a_single_zero_byte_and_other_characteristics()
     {
         using var d = new SramAxsDecoder(doubleWindowMs: 40);

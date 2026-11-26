@@ -4,8 +4,9 @@ namespace ShiftBridge.Core.Controllers;
 /// Résultat du décodage d'une trame.
 /// <paramref name="Held"/> : ensemble COMPLET des touches actuellement enfoncées (null = la trame n'en dit rien, l'état est conservé).
 /// <paramref name="Taps"/> : appuis instantanés sans trame de relâchement (la manette ne signale jamais le relâchement) ; chaque élément = un appui.
+/// <paramref name="Detail"/> : précision pour le journal (octets reçus, écart entre deux appuis…), sans effet sur les touches.
 /// </summary>
-public sealed record DecodedFrame(IReadOnlySet<string>? Held, IReadOnlyList<string> Taps, int? BatteryPercent = null)
+public sealed record DecodedFrame(IReadOnlySet<string>? Held, IReadOnlyList<string> Taps, int? BatteryPercent = null, string? Detail = null)
 {
     public static readonly IReadOnlyList<string> NoTaps = [];
     /// <summary>Trame reconnue qui ne change rien (état, compteur…).</summary>

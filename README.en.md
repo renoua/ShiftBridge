@@ -74,13 +74,13 @@ Good to know:
 
 These controllers lock about a minute after connecting if Zwift has not "unlocked" them in the last 24 h (the Zwift service is then no longer exposed). ShiftBridge detects the lock and reconnects automatically; for a lasting unlock, open the Zwift app, connect the controller for 10 to 30 s, close Zwift completely, then come back to ShiftBridge. A built-in wizard is planned for a later version.
 
-## Project status (v0.25.0)
+## Project status (v0.25.1)
 
 > **Tested with limited hardware.** ShiftBridge has been tried by its author on a small number of controllers, devices and apps. Other models, trainers, firmwares or apps may behave differently: treat it as a **beta**. Feedback is welcome (**Settings** → diagnostic log, then a [GitHub issue](https://github.com/renoua/ShiftBridge/issues)). In the table, "to validate on real hardware" means "not yet confirmed on a wide range of hardware".
 
 | Feature | Status |
 |---|---|
-| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (662 automated tests, hand-built frames) |
+| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (663 automated tests, hand-built frames) |
 | UI language: French if the system is in French (fr-FR, fr-BE, fr-CH, fr-CA…), English otherwise; Automatic / Français / English selector in the advanced options (applied on restart). Texts are in `src/ShiftBridge.Core/Localization/Strings.resx` (English) and `Strings.fr.resx` (French). The Diagnostic log stays in French | Tested (resource consistency, language choice, label rendering); **on-screen rendering not verified** (Windows and Android) |
 | Keyboard, HID remotes, Xbox controllers and joysticks (Windows): open key identity, multi-device merging, XInput/HID mapping, chain up to OBC | Tested with a fake provider |
 | Nintendo Switch Pro Controller over Bluetooth (full 0x30 report, decoding verified on real reports) | Tested on real hardware: buttons, d-pad, sticks, L/R, ZL/ZR |

@@ -18,6 +18,8 @@ public sealed class SramAxsDecoder : IButtonDecoder, IDeferredDecoder
     private readonly object _lock = new();
     private Timer? _timer;
     private int _taps;
+    private string _firstHex = "";
+    private long _firstTick;
 
     public SramAxsDecoder(int doubleWindowMs = 300) => _windowMs = Math.Max(20, doubleWindowMs);
 
@@ -27,32 +29,41 @@ public sealed class SramAxsDecoder : IButtonDecoder, IDeferredDecoder
     {
         if (characteristic != Trigger) return null;
         if (data.Length == 0 || (data.Length == 1 && data[0] == 0x00)) return DecodedFrame.Nothing;
-        bool isDouble = false;
+        string hex = Convert.ToHexString(data);
+        long now = Environment.TickCount64;
+        string? doubleDetail = null;
         lock (_lock)
         {
             _taps++;
             if (_taps == 1)
+            {
+                _firstHex = hex;
+                _firstTick = now;
                 _timer = new Timer(_ => Fire(), null, _windowMs, Timeout.Infinite);
+            }
             else
             {
                 _timer?.Dispose(); _timer = null;
                 _taps = 0;
-                isDouble = true;
+                // Octets des deux notifications et écart : de quoi vérifier sur les journaux si un levier se distingue de l'autre.
+                doubleDetail = $"{_firstHex} + {hex}, écart {now - _firstTick} ms";
             }
         }
-        if (isDouble) Deferred?.Invoke(DecodedFrame.Tap("Double"));
+        if (doubleDetail is not null) Deferred?.Invoke(DecodedFrame.Tap("Double") with { Detail = doubleDetail });
         return DecodedFrame.Nothing;
     }
 
     private void Fire()
     {
+        string hex;
         lock (_lock)
         {
             if (_taps == 0) return;
             _taps = 0;
+            hex = _firstHex;
             _timer?.Dispose(); _timer = null;
         }
-        Deferred?.Invoke(DecodedFrame.Tap("Single"));
+        Deferred?.Invoke(DecodedFrame.Tap("Single") with { Detail = hex });
     }
 
     public void Dispose()

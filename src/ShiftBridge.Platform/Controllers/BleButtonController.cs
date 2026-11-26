@@ -310,7 +310,7 @@ public sealed class BleButtonController : IController
         if (hex is not null && (VerboseFrames || events.Count > 0 || taps.Count > 0 || _frameCount == 1))
             Frame?.Invoke($"{Info.Name} < {hex}");
         else if (hex is null && taps.Count > 0)
-            Frame?.Invoke($"{Info.Name} : {string.Join(", ", frame.Taps)}");
+            Frame?.Invoke($"{Info.Name} : {string.Join(", ", frame.Taps)}{(frame.Detail is { } detail ? $" ({detail})" : "")}");
 
         if (frame.BatteryPercent is { } pct) { BatteryPercent = pct; BatteryChanged?.Invoke(pct); }
         if (events.Count > 0) ButtonEvents?.Invoke(events);
