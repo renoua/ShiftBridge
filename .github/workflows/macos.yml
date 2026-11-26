@@ -30,20 +30,41 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Xcode le plus récent
-        run: |
-          xcode="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
-          echo "Xcode : $xcode"
-          sudo xcode-select -s "$xcode"
-          xcodebuild -version
-
       - name: Workload macOS
         run: dotnet workload install macos
+
+      # Le pack Microsoft.macOS.Sdk.<tfm>_<X.Y> est compilé pour Xcode X.Y : un Xcode plus récent du runner
+      # (ex. 26.6 pour un pack 26.0) ne fournit pas le SDK attendu (« SDK … cannot be located », install_name_tool introuvable).
+      # On prend donc l'Xcode X.Y le plus récent, sinon le plus proche inférieur, sinon celui par défaut du runner.
+      - name: Xcode correspondant au workload
+        run: |
+          pack="$(ls -d "${DOTNET_ROOT:-$HOME/.dotnet}"/packs/Microsoft.macOS.Sdk.*_* | sort -V | tail -1)"
+          want="${pack##*_}"
+          echo "Pack : $pack → Xcode $want attendu"
+          echo "Xcode disponibles :"; ls -d /Applications/Xcode_*.app
+          xcode=""
+          for app in $(ls -d /Applications/Xcode_*.app | grep -vi beta); do
+            v="$(basename "$app" .app)"; v="${v#Xcode_}"
+            if [ "$(printf '%s\n%s.999\n' "$v" "$want" | sort -V | tail -1)" = "$want.999" ]; then
+              if [ -z "$xcode" ] || [ "$(printf '%s\n%s\n' "$v" "$best" | sort -V | tail -1)" = "$v" ]; then
+                xcode="$app"; best="$v"
+              fi
+            fi
+          done
+          if [ -n "$xcode" ]; then
+            echo "Xcode choisi : $xcode"
+            sudo xcode-select -s "$xcode"
+          else
+            echo "::warning::Aucun Xcode <= $want trouvé, Xcode par défaut conservé"
+          fi
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-path
+          xcrun -f install_name_tool
 
       - name: Tests
         run: dotnet test tests/ShiftBridge.Core.Tests -c Release
 
-      # ValidateXcodeVersion=false : le workload exige une version d'Xcode précise, celle du runner peut différer d'un cran.
+      # ValidateXcodeVersion=false : l'Xcode choisi ci-dessus peut différer du workload d'un correctif (ex. 26.0.1 au lieu de 26.0).
       - name: Compilation
         run: dotnet build src/ShiftBridge.MacOS/ShiftBridge.MacOS.csproj -c Release -p:ValidateXcodeVersion=false
 
