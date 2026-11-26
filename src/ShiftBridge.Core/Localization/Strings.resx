@@ -141,6 +141,8 @@
   <data name="Keys_ClickToEdit" xml:space="preserve"><value>Click to edit</value></data>
   <data name="Trainer_Reconnecting" xml:space="preserve"><value>Reconnecting…</value></data>
   <data name="Trainer_VsActive" xml:space="preserve"><value>Virtual shifting active</value></data>
+  <data name="Trainer_NoControl" xml:space="preserve"><value>Trainer cannot be controlled</value></data>
+  <data name="Trainer_NoControlDetail" xml:space="preserve"><value>Neither FTMS nor FE-C: virtual shifting impossible, connect the app directly to the trainer</value></data>
   <data name="Trainer_ReadyToEnable" xml:space="preserve"><value>Ready to enable</value></data>
   <data name="Trainer_ChooseOnPage" xml:space="preserve"><value>Use the Trainer page to choose one</value></data>
   <data name="App_Connected" xml:space="preserve"><value>Application connected</value></data>

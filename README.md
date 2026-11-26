@@ -74,13 +74,13 @@ Même logique que sur Windows (mêmes manettes, mêmes touches, même virtual sh
 
 Ces manettes se verrouillent environ une minute après la connexion si Zwift ne les a pas « déverrouillées » dans les dernières 24 h (le service Zwift n'est alors plus exposé). ShiftBridge détecte le verrouillage et reconnecte automatiquement ; pour un déverrouillage durable, ouvrez l'application Zwift, connectez la manette 10 à 30 s, fermez Zwift complètement, puis revenez dans ShiftBridge. L'assistant intégré est prévu pour une version suivante.
 
-## État du projet (v0.24.0)
+## État du projet (v0.25.0)
 
 > **Testé avec un matériel limité.** ShiftBridge a été essayé par son auteur sur un petit nombre de manettes, d'appareils et d'applications. D'autres modèles, trainers, firmwares ou applications peuvent se comporter différemment : considérez-le comme une **bêta**. Les retours sont bienvenus (page *Réglages* → journal de diagnostic, puis une [issue GitHub](https://github.com/renoua/ShiftBridge/issues)). Dans le tableau, « à valider sur matériel réel » signifie « pas encore confirmé sur un éventail large de matériel ».
 
 | Fonction | État |
 |---|---|
-| Analyse des trames Play / Click / Ride, mapping, vitesse virtuelle, répétition sur appui long, cycle de vie (déconnexion, arrêt, clients bloqués, configuration) | Testé (646 tests automatisés, trames construites à la main) |
+| Analyse des trames Play / Click / Ride, mapping, vitesse virtuelle, répétition sur appui long, cycle de vie (déconnexion, arrêt, clients bloqués, configuration) | Testé (662 tests automatisés, trames construites à la main) |
 | Langue de l'interface : français si le système est en français (fr-FR, fr-BE, fr-CH, fr-CA…), anglais sinon ; sélecteur Automatique / Français / English dans les options avancées (pris en compte au redémarrage). Les textes sont dans `src/ShiftBridge.Core/Localization/Strings.resx` (anglais) et `Strings.fr.resx` (français). Le journal Diagnostic reste en français | Testé (cohérence des ressources, choix de la langue, rendu des libellés) ; **rendu à l'écran non vérifié** (Windows et Android) |
 | Clavier, télécommandes HID, manettes Xbox et joysticks (Windows) : identité de touche ouverte, fusion multi-périphériques, mapping XInput/HID, chaîne jusqu'à l'OBC | Testé avec un faux fournisseur d'entrées |
 | Manette Nintendo Switch Pro Controller en Bluetooth (rapport complet 0x30, décodage vérifié sur des rapports réels) | Testé sur matériel réel : boutons, croix, sticks, L/R, ZL/ZR |
@@ -91,6 +91,7 @@ Ces manettes se verrouillent environ une minute après la connexion si Zwift ne 
 | Connexion BLE aux manettes, vibration, OBC Bluetooth | Écrit, **à valider sur matériel réel** |
 | Télécommandes et groupes BLE (VS200, BC2, T7H, Onelap Key, Di2, AXS simple, KICKR Bike, Elite Square, SB20, Wheeltop, L-TWOO) et inspecteur Bluetooth (0.19) | Décodeurs et cycle de vie testés avec des trames publiées et un faux BLE ; **jamais essayés avec le vrai matériel** |
 | Cardio : décodage 0x2A37, recherche, source avec reconnexion, service 0x180D republié par le proxy (lecture locale, écriture refusée), redémarrage du proxy au changement de capteur | Testé avec de faux capteurs et un faux trainer ; **pas encore avec une vraie ceinture, ni avec TPV / Les jeux du cycle** (qu'une appli accepte la FC d'un trainer DirCon est à valider) |
+| Trainers Tacx sans FTMS (NEO Smart T2800…) : le canal **FE-C sur Bluetooth** est relayé à l'appli et le virtual shifting réécrit la pente des pages 0x33 (vitesse virtuelle dans la page 0x10). Un trainer sans FTMS ni FE-C est signalé « non pilotable » (les vitesses repartent alors vers l'appli). Le rapport de compatibilité liste aussi les services non relayés | Codec validé sur les trames réelles d'un NEO T2800 ; proxy testé avec un faux trainer ; **à valider avec TPV** (l'appli doit accepter le FE-C via DirCon) |
 | Click v2 : codes `0x0A`/`0x0B`, sens des champs du Click v1, seuil des palettes | Hypothèses à confirmer avec le mode Diagnostic |
 | Android : l'APK se compile (Debug et Release) et le manifeste est vérifié ; l'abstraction Bluetooth est couverte par des tests avec une fausse plateforme | Testé côté logique |
 | Android : scan, connexion GATT des manettes et du trainer, OBC Bluetooth périphérique, service de premier plan, mDNS sous Android | Écrit, **jamais exécuté sur un appareil** : à valider sur matériel réel (le Bluetooth ne fonctionne pas dans l'émulateur) |

@@ -361,7 +361,10 @@ public sealed class SramAxsAdvancedController : IController
 
     private async Task EmitTapsAsync(List<ButtonKey> taps)
     {
+        long queued = Environment.TickCount64;
         await _tapGate.WaitAsync();
+        long waited = Environment.TickCount64 - queued;
+        if (waited >= 300) Log?.Invoke($"{Info.Name} : appui émis avec {waited} ms de retard (appui précédent pas encore terminé)");
         try
         {
             foreach (var key in taps)

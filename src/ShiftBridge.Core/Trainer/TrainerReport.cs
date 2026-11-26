@@ -6,10 +6,31 @@ namespace ShiftBridge.Core.Trainer;
 /// Rapport de compatibilité d'un trainer, écrit au journal à la connexion : de quoi étendre la prise en charge à d'autres
 /// modèles à partir des retours d'utilisateurs (services, caractéristiques, propriétés, fonctions FTMS, premier échantillon).
 /// </summary>
+/// <summary>Comment le proxy peut piloter la résistance du trainer (et donc appliquer le virtual shifting).</summary>
+public enum TrainerControl
+{
+    /// <summary>Fitness Machine Service (0x1826) : commande de simulation réécrite.</summary>
+    Ftms,
+    /// <summary>ANT+ FE-C sur Bluetooth (Tacx sans FTMS) : page 0x33 réécrite.</summary>
+    FeC,
+    /// <summary>Ni l'un ni l'autre : le trainer ne fournit que des mesures, le virtual shifting est impossible.</summary>
+    None,
+}
+
 public static class TrainerReport
 {
+    /// <summary>Protocole de pilotage disponible dans l'arbre relayé : FTMS en priorité, sinon FE-C.</summary>
+    public static TrainerControl DetectControl(IReadOnlyDictionary<Guid, List<(Guid Uuid, byte Props)>> tree)
+    {
+        bool Has(Guid ch) => tree.Values.Any(c => c.Any(x => x.Uuid == ch));
+        if (Has(FtmsCodec.ControlPoint)) return TrainerControl.Ftms;
+        if (Has(FecCodec.Tx) && Has(FecCodec.Rx)) return TrainerControl.FeC;
+        return TrainerControl.None;
+    }
+
     public static string Build(string trainerName, string transport,
-        IReadOnlyDictionary<Guid, List<(Guid Uuid, byte Props)>> tree, FtmsFeatures? features)
+        IReadOnlyDictionary<Guid, List<(Guid Uuid, byte Props)>> tree, FtmsFeatures? features,
+        IEnumerable<Guid>? skippedServices = null, TrainerControl? control = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine($"=== Rapport de compatibilité trainer : {trainerName} ({transport}) ===");
@@ -19,9 +40,18 @@ public static class TrainerReport
             foreach (var (uuid, props) in chars)
                 sb.AppendLine($"    {Short(uuid)}  {Props(props)}");
         }
+        if (skippedServices?.ToList() is { Count: > 0 } skipped)
+            sb.AppendLine($"  non relayé(s) à l'appli : {string.Join(", ", skipped.Select(Short))}");
         sb.Append(features is null
             ? "  Fonctions FTMS : non lues (pas de caractéristique 0x2ACC)"
             : $"  Fonctions FTMS : {features.Describe()}");
+        if (control is { } c)
+            sb.AppendLine().Append(c switch
+            {
+                TrainerControl.Ftms => "  Pilotage : FTMS",
+                TrainerControl.FeC => "  Pilotage : FE-C sur Bluetooth (pas de FTMS) : la pente des pages 0x33 est réécrite",
+                _ => "  Pilotage : AUCUN (ni FTMS ni FE-C) : le trainer ne fournit que des mesures, virtual shifting impossible",
+            });
         return sb.ToString();
     }
 

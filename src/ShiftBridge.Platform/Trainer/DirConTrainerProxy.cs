@@ -48,6 +48,18 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     private readonly string _transportLabel;
     private bool _firstSampleLogged;
 
+    // ---------- FE-C (Tacx sans FTMS) ----------
+    // Protégés par _state. La dernière page 0x33 de l'appli (avant réécriture) est réappliquée à chaque changement de rapport.
+    private byte[]? _fecAppTrack;
+    private byte _fecLastTarget;            // dernière page de mode (0x30, 0x31 ou 0x33) envoyée par l'appli
+    private byte[]? _fecUserConfig;         // page 0x37 : rejouée après une reconnexion
+    private double _fecCw = FecCodec.DefaultCw;
+    private int? _fecCadence;
+    private readonly SemaphoreSlim _fecWriteGate = new(1, 1); // une écriture FE-C à la fois (appli et proxy)
+
+    /// <summary>Protocole de pilotage du trainer, connu après <see cref="StartAsync"/>.</summary>
+    public TrainerControl Control { get; private set; } = TrainerControl.Ftms;
+
     public DirConTrainerProxy(ITrainerLink upstream, VirtualShiftingModel model,
         IReadOnlyDictionary<string, string>? txtTemplate = null, string name = "ShiftBridge Trainer",
         GattRelayPolicy? policy = null, string trainerLabel = "Trainer", string transportLabel = "?", IMdnsAdvertiser? mdns = null)
@@ -112,13 +124,19 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     public async Task StartAsync(CancellationToken ct = default)
     {
         // 1) Copie (filtrée) de l'arbre de services du vrai trainer et abonnement à ses notifications.
-        foreach (var svc in await _upstream.DiscoverServicesAsync())
+        // Sans FTMS, le canal FE-C (Tacx) est le seul moyen de piloter la résistance : il est alors relayé, et réécrit.
+        var upstreamServices = await _upstream.DiscoverServicesAsync();
+        bool hasFtms = upstreamServices.Contains(FtmsCodec.FitnessMachineService);
+        List<Guid> skipped = [];
+        foreach (var svc in upstreamServices)
         {
-            if (!_policy.ShouldRelayService(svc)) continue;
+            bool fecFallback = !hasFtms && svc == FecCodec.Service;
+            if (!fecFallback && !_policy.ShouldRelayService(svc)) { skipped.Add(svc); continue; }
             var chars = (await _upstream.DiscoverCharacteristicsAsync(svc))
-                .Where(c => _policy.ShouldRelayCharacteristic(svc, c.Uuid)).ToList();
+                .Where(c => fecFallback || _policy.ShouldRelayCharacteristic(svc, c.Uuid)).ToList();
             if (chars.Count > 0) _tree[svc] = chars;
         }
+        Control = TrainerReport.DetectControl(_tree);
 
         // Cardio externe : le service du capteur remplace celui du trainer (rien n'est lu ni abonné côté trainer).
         if (HeartRate is { } hr)
@@ -145,7 +163,10 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
 
         // 2) Capacités du trainer : avertir si la simulation n'est pas déclarée (le virtual shifting en dépend).
         await ReadFeaturesAsync();
-        Log?.Invoke(TrainerReport.Build(_trainerLabel, _transportLabel, _tree, Features));
+        Log?.Invoke(TrainerReport.Build(_trainerLabel, _transportLabel, _tree, Features, skipped, Control));
+        if (Control == TrainerControl.None)
+            Log?.Invoke("ATTENTION : ce trainer n'expose ni FTMS ni FE-C : ShiftBridge ne peut pas régler sa résistance. " +
+                        "Le virtual shifting est inopérant ; les vitesses sont laissées à l'appli. Connectez l'appli directement au trainer.");
 
         // 3) Arbitre du Control Point.
         _arbiter = new ControlPointArbiter((cp, _) => _upstream.WriteAsync(FtmsCodec.ControlPoint, cp));
@@ -285,6 +306,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     public Task ReapplyAsync()
     {
         if (!Enabled) return Task.CompletedTask;
+        if (Control == TrainerControl.FeC) return ReapplyFecAsync();
 
         // Mode natif : le trainer applique le rapport. On lui envoie le nouveau rapport de la table, même sans simulation en cours
         // (il le retient pour la suite) ; la résistance suit sans toucher à la commande FTMS de l'appli.
@@ -298,6 +320,99 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         var sim = _tracker.LastTarget;
         if (sim is not null) _arbiter.SubmitFromProxy(Adjust(sim));
         return Task.CompletedTask;
+    }
+
+    // ---------- FE-C ----------
+
+    /// <summary>Page 0x33 à envoyer au trainer pour le rapport courant (pente seule : la norme FE-C met la traînée ailleurs).</summary>
+    private byte[] AdjustFec(byte[] track)
+    {
+        if (!FecCodec.TryParseTrack(track, out short grade, out double crr)) return track;
+        double speed, cw;
+        lock (_state) { speed = _lastSpeedMs; cw = _fecCw; }
+        var sim = new SimulationParams(0, grade,
+            (byte)Math.Clamp(Math.Round(crr / 0.0001), 0, 255), (byte)Math.Clamp(Math.Round(cw / 0.01), 0, 255));
+        short adjusted = _model.AdjustGrade(sim, speed);
+        if (adjusted == grade) return track;
+
+        long now = Environment.TickCount64;
+        if (now - Interlocked.Read(ref _lastLogTick) > 1000)
+        {
+            Interlocked.Exchange(ref _lastLogTick, now);
+            Log?.Invoke($"Virtual shifting (FE-C) : rapport {_model.Gear} (×{_model.Factor:0.00}) pente {grade * 0.01:0.0} % → {adjusted * 0.01:0.0} %");
+        }
+        return FecCodec.WithGrade(track, adjusted);
+    }
+
+    private async Task WriteFecAsync(byte[] value)
+    {
+        await _fecWriteGate.WaitAsync();
+        try { await _upstream.WriteAsync(FecCodec.Tx, value); }
+        finally { _fecWriteGate.Release(); }
+    }
+
+    /// <summary>Changement de rapport : la dernière simulation de l'appli, réajustée. Rien en ERG ou en résistance fixe.</summary>
+    private async Task ReapplyFecAsync()
+    {
+        byte[]? track; byte target;
+        lock (_state) { track = _fecAppTrack; target = _fecLastTarget; }
+        if (track is null || target != FecCodec.PageTrackResistance || !_upstream.IsConnected) return;
+        try { await WriteFecAsync(AdjustFec(track)); }
+        catch (Exception ex) { Log?.Invoke($"Virtual shifting (FE-C) : envoi au trainer impossible ({ex.Message})"); }
+    }
+
+    /// <summary>Écriture de l'appli sur FEC3 : mémorise l'état demandé, réécrit la pente des pages 0x33, relaie le reste tel quel.</summary>
+    private async Task<DirConPacket> HandleFecWriteAsync(DirConPacket p, Guid ch, byte[] value)
+    {
+        byte[] toTrainer = value;
+        if (FecCodec.TrySplit(value, out var messages))
+        {
+            var output = new List<byte>(value.Length);
+            foreach (var m in messages)
+            {
+                byte page = FecCodec.Page(m);
+                if (LogWire) Log?.Invoke($"Appli → trainer : {FecCodec.Describe(m)}");
+                lock (_state)
+                {
+                    if (FecCodec.IsTargetPage(page)) _fecLastTarget = page;
+                    if (page == FecCodec.PageTrackResistance) _fecAppTrack = m;
+                    else if (page == FecCodec.PageUserConfiguration) _fecUserConfig = m;
+                    else if (page == FecCodec.PageWindResistance && FecCodec.TryParseWindCw(m, out var cw)) _fecCw = cw;
+                }
+                output.AddRange(Enabled && page == FecCodec.PageTrackResistance ? AdjustFec(m) : m);
+            }
+            toTrainer = [.. output];
+        }
+
+        if (!_upstream.IsConnected) return DirConPacket.AckResponse(DirConId.WriteCharacteristic, p.Sequence, ch); // rejoué à la reconnexion
+        try { await WriteFecAsync(toTrainer); }
+        catch (Exception) { return DirConPacket.Error(p.Id, p.Sequence, DirConResponse.WriteFailed); }
+        return DirConPacket.AckResponse(DirConId.WriteCharacteristic, p.Sequence, ch);
+    }
+
+    /// <summary>Notification FEC2 : mesures (vitesse, cadence, puissance) lues, vitesse remplacée par la vitesse virtuelle.</summary>
+    private byte[] OnFecNotification(byte[] value)
+    {
+        if (!FecCodec.TrySplit(value, out var messages)) return value;
+        bool changed = false;
+        for (int i = 0; i < messages.Count; i++)
+        {
+            var m = messages[i];
+            if (FecCodec.TryGetTrainerData(m, out var cadence, out var power))
+            {
+                BikeData.Add(Environment.TickCount64, power);
+                lock (_state) { _lastPowerW = power; _lastCadenceRpm = cadence; _fecCadence = cadence; }
+            }
+            else if (FecCodec.TryGetSpeedMs(m, out var v))
+            {
+                if (!_firstSampleLogged) { _firstSampleLogged = true; Log?.Invoke($"Premier échantillon FE-C : {Convert.ToHexString(m)} (vitesse {v * 3.6:0.0} km/h)"); }
+                RealRatioDetector? detector; int? rpm;
+                lock (_state) { _lastSpeedMs = v; detector = _detector; rpm = _fecCadence; }
+                detector?.AddSample(v, rpm ?? 0);
+                if (Enabled && Math.Abs(_model.Factor - 1.0) > 1e-9) { messages[i] = FecCodec.ScaleSpeed(m, _model.Factor); changed = true; }
+            }
+        }
+        return changed ? [.. messages.SelectMany(m => m)] : value;
     }
 
     private byte[] Adjust(byte[] cp)
@@ -396,6 +511,16 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             Enabled = false;
             await DisposeNativeAsync(release: true);
             NativeStateChanged?.Invoke();
+            if (Control == TrainerControl.FeC)
+            {
+                byte[]? track; byte target;
+                lock (_state) { track = _fecAppTrack; target = _fecLastTarget; }
+                if (track is not null && target == FecCodec.PageTrackResistance && _upstream.IsConnected)
+                {
+                    try { await WriteFecAsync(track); } catch (Exception ex) { Log?.Invoke($"FE-C : pente de l'appli non rétablie ({ex.Message})"); }
+                }
+                return;
+            }
             // Le trainer garde la dernière simulation ajustée : on lui renvoie celle de l'appli telle quelle.
             if (_arbiter is not null && _tracker.CanReapplySimulation && _tracker.LastTarget is { } sim) _arbiter.SubmitFromProxy(sim);
             return;
@@ -428,6 +553,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     /// <summary>Après une reconnexion le contrôle FTMS est perdu : on rejoue ce que l'appli avait demandé.</summary>
     private void OnUpstreamReconnected()
     {
+        if (Control == TrainerControl.FeC) { _ = ReplayFecAsync(); return; }
         if (_arbiter is null) return;
         var sequence = _tracker.ReplaySequence(cp => Enabled ? Adjust(cp) : cp);
         if (_native is not null)
@@ -439,6 +565,20 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         if (sequence.Count == 0) return;
         Log?.Invoke($"Trainer reconnecté : rejeu de {sequence.Count} commande(s) de contrôle");
         _arbiter.SubmitProxySequence(sequence);
+    }
+
+    /// <summary>Après une reconnexion FE-C : configuration du cycliste, puis le dernier mode demandé par l'appli.</summary>
+    private async Task ReplayFecAsync()
+    {
+        byte[]? config, track; byte target;
+        lock (_state) { config = _fecUserConfig; track = _fecAppTrack; target = _fecLastTarget; }
+        try
+        {
+            if (config is not null) await WriteFecAsync(config);
+            if (track is not null && target == FecCodec.PageTrackResistance) await WriteFecAsync(Enabled ? AdjustFec(track) : track);
+            if (config is not null || track is not null) Log?.Invoke("Trainer reconnecté : configuration et simulation FE-C rejouées");
+        }
+        catch (Exception ex) { Log?.Invoke($"Rejeu FE-C impossible : {ex.Message}"); }
     }
 
     // ---------- Trainer → appli ----------
@@ -484,6 +624,10 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             }
             // Mode natif : le trainer possède le rapport, sa vitesse est laissée telle quelle (à valider sur matériel).
             if (Enabled && !NativeActive && Math.Abs(_model.Factor - 1.0) > 1e-9) value = FtmsCodec.ScaleSpeed(value, _model.Factor);
+        }
+        else if (ch == FecCodec.Rx && Control == TrainerControl.FeC)
+        {
+            value = OnFecNotification(value);
         }
         else if (ch == FtmsCodec.FitnessMachineStatus && Enabled && !NativeActive && value.Length > 0 && value[0] == FtmsCodec.StatusSimulationChanged)
         {
@@ -623,6 +767,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
 
                 if (IsInjected(ch)) return DirConPacket.Error(p.Id, p.Sequence, DirConResponse.OperationNotSupported);
                 if (ch == FtmsCodec.ControlPoint) return await HandleControlPointWriteAsync(client, p, ch, value);
+                if (ch == FecCodec.Tx && Control == TrainerControl.FeC) return await HandleFecWriteAsync(p, ch, value);
 
                 try { await _upstream.WriteAsync(ch, value); }
                 catch (Exception) { return DirConPacket.Error(p.Id, p.Sequence, DirConResponse.WriteFailed); }

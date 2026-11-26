@@ -320,7 +320,10 @@ public sealed class BleButtonController : IController
     /// <summary>Appui puis relâchement différé de chaque touche, l'un après l'autre (sans trame de relâchement côté manette).</summary>
     private async Task EmitTapsAsync(List<ButtonKey> taps)
     {
+        long queued = Environment.TickCount64;
         await _tapGate.WaitAsync();
+        long waited = Environment.TickCount64 - queued;
+        if (waited >= 300) Log?.Invoke($"{Info.Name} : appui émis avec {waited} ms de retard (appui précédent pas encore terminé)");
         try
         {
             foreach (var key in taps)

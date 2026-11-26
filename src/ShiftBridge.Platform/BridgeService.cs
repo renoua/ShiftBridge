@@ -682,7 +682,11 @@ public sealed class BridgeService : IAsyncDisposable
     /// ShiftBridge applique lui-même les vitesses au trainer (proxy actif, option « l'appli gère les vitesses » décochée).
     /// Sinon + et − partent à l'appli par OpenBikeControl, comme sans proxy.
     /// </summary>
-    private bool ProxyShifts => _proxy is not null && !Config.AppHandlesShifting;
+    /// Un trainer que le proxy ne sait pas piloter (ni FTMS ni FE-C) ne peut rien appliquer : les vitesses vont alors à l'appli.
+    private bool ProxyShifts => _proxy is { Control: not TrainerControl.None } && !Config.AppHandlesShifting;
+
+    /// <summary>Protocole de pilotage du trainer relayé (null sans proxy) : <see cref="TrainerControl.None"/> = virtual shifting impossible.</summary>
+    public TrainerControl? TrainerControlMode => _proxy?.Control;
 
     public bool AppHandlesShifting => Config.AppHandlesShifting;
 
@@ -1015,8 +1019,10 @@ public sealed class BridgeService : IAsyncDisposable
     public void InjectEvents(IReadOnlyList<ButtonEvent> events, object? source = null)
     {
         List<(ObcButtonId Id, byte State)> changes, toSend;
+        long started = Environment.TickCount64, lockWait;
         lock (_dispatchLock)
         {
+            lockWait = Environment.TickCount64 - started;
             changes = _mapping.Translate(events);
             // Avec le proxy trainer actif, c'est lui qui applique les vitesses au trainer : on ne les envoie PAS à l'appli,
             // sinon elles seraient comptées deux fois (virtual shifting du proxy + celui de l'appli).
@@ -1054,6 +1060,17 @@ public sealed class BridgeService : IAsyncDisposable
 
         if (ProxyShifts && changes.Any(c => c.Id is ObcButtonId.ShiftUp or ObcButtonId.ShiftDown or ObcButtonId.ShiftUpBy or ObcButtonId.ShiftDownBy))
             Log?.Invoke("Vitesse appliquée par le proxy trainer (non envoyée à l'appli).");
+        LogSlowDispatch(started, lockWait);
+    }
+
+    /// <summary>Seuil au-delà duquel le traitement d'un appui est signalé au journal (diagnostic des appuis en retard).</summary>
+    internal const int SlowDispatchMs = 300;
+
+    private void LogSlowDispatch(long started, long lockWait)
+    {
+        long total = Environment.TickCount64 - started;
+        if (total >= SlowDispatchMs)
+            Log?.Invoke($"Lenteur : appui traité en {total} ms (dont {lockWait} ms d'attente du verrou de répartition)");
     }
 
     /// <summary>

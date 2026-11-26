@@ -74,13 +74,13 @@ Good to know:
 
 These controllers lock about a minute after connecting if Zwift has not "unlocked" them in the last 24 h (the Zwift service is then no longer exposed). ShiftBridge detects the lock and reconnects automatically; for a lasting unlock, open the Zwift app, connect the controller for 10 to 30 s, close Zwift completely, then come back to ShiftBridge. A built-in wizard is planned for a later version.
 
-## Project status (v0.24.0)
+## Project status (v0.25.0)
 
 > **Tested with limited hardware.** ShiftBridge has been tried by its author on a small number of controllers, devices and apps. Other models, trainers, firmwares or apps may behave differently: treat it as a **beta**. Feedback is welcome (**Settings** → diagnostic log, then a [GitHub issue](https://github.com/renoua/ShiftBridge/issues)). In the table, "to validate on real hardware" means "not yet confirmed on a wide range of hardware".
 
 | Feature | Status |
 |---|---|
-| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (646 automated tests, hand-built frames) |
+| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (662 automated tests, hand-built frames) |
 | UI language: French if the system is in French (fr-FR, fr-BE, fr-CH, fr-CA…), English otherwise; Automatic / Français / English selector in the advanced options (applied on restart). Texts are in `src/ShiftBridge.Core/Localization/Strings.resx` (English) and `Strings.fr.resx` (French). The Diagnostic log stays in French | Tested (resource consistency, language choice, label rendering); **on-screen rendering not verified** (Windows and Android) |
 | Keyboard, HID remotes, Xbox controllers and joysticks (Windows): open key identity, multi-device merging, XInput/HID mapping, chain up to OBC | Tested with a fake provider |
 | Nintendo Switch Pro Controller over Bluetooth (full 0x30 report, decoding verified on real reports) | Tested on real hardware: buttons, d-pad, sticks, L/R, ZL/ZR |
@@ -91,6 +91,7 @@ These controllers lock about a minute after connecting if Zwift has not "unlocke
 | BLE connection to controllers, vibration, Bluetooth OBC | Written, **to validate on real hardware** |
 | BLE remotes and groupsets (VS200, BC2, T7H, Onelap Key, Di2, simple AXS, KICKR Bike, Elite Square, SB20, Wheeltop, L-TWOO) and Bluetooth inspector (0.19) | Decoders and lifecycle tested with published frames and a fake BLE; **never tried with the real hardware** |
 | Heart rate: 0x2A37 decoding, scan, source with reconnection, 0x180D service republished by the proxy (local read, write refused), proxy restart on sensor change | Tested with fake sensors and a fake trainer; **not yet with a real strap, nor with TPV / Les jeux du cycle** (whether an app accepts heart rate from a DirCon trainer is to be validated) |
+| Tacx trainers without FTMS (NEO Smart T2800…): the **FE-C over Bluetooth** channel is relayed to the app and virtual shifting rewrites the grade of 0x33 pages (virtual speed in page 0x10). A trainer with neither FTMS nor FE-C is reported as "cannot be controlled" (gears then go back to the app). The compatibility report also lists the services not relayed | Codec validated on real NEO T2800 frames; proxy tested with a fake trainer; **to be validated with TPV** (the app must accept FE-C over DirCon) |
 | Click v2: `0x0A`/`0x0B` codes, Click v1 field meanings, paddle threshold | Assumptions to confirm with Diagnostic mode |
 | Android: the APK builds (Debug and Release) and the manifest is verified; the Bluetooth abstraction is covered by tests with a fake platform | Tested on the logic side |
 | Android: scan, GATT connection to controllers and trainer, peripheral Bluetooth OBC, foreground service, mDNS on Android | Written, **never run on a device**: to validate on real hardware (Bluetooth does not work in the emulator) |

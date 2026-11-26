@@ -283,9 +283,13 @@ public sealed partial class MainViewModel : ObservableObject
         if (_bridge.TrainerProxyActive)
         {
             bool recon = _bridge.TrainerLinkState == LinkState.Reconnecting;
-            TrainerSummary = recon ? Strings.Trainer_Reconnecting : Strings.Trainer_VsActive;
-            TrainerDetail = hasTrainer ? trainerName : "";
-            TrainerState = recon ? UiState.Warning : UiState.Ok;
+            var control = _bridge.TrainerControlMode;
+            bool noControl = control == ShiftBridge.Core.Trainer.TrainerControl.None;
+            TrainerSummary = recon ? Strings.Trainer_Reconnecting : noControl ? Strings.Trainer_NoControl : Strings.Trainer_VsActive;
+            TrainerDetail = noControl ? Strings.Trainer_NoControlDetail
+                : control == ShiftBridge.Core.Trainer.TrainerControl.FeC && hasTrainer ? $"{trainerName} (FE-C)"
+                : hasTrainer ? trainerName : "";
+            TrainerState = recon || noControl ? UiState.Warning : UiState.Ok;
         }
         else
         {
