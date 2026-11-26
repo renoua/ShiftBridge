@@ -25,6 +25,8 @@ public sealed class AppConfig
     public bool StartWithWindows { get; set; }
     /// <summary>Recherche sur GitHub Releases au lancement, puis toutes les 24 h, si l'hôte le permet.</summary>
     public bool CheckForUpdates { get; set; } = true;
+    /// <summary>Propose aussi les versions de test (préversions GitHub), que les autres utilisateurs ne reçoivent pas.</summary>
+    public bool IncludePrereleases { get; set; }
     /// <summary>Obsolète depuis 0.15 (les sections « Avancé » se replient page par page) : conservé pour que les anciens config.json restent lisibles.</summary>
     public bool ShowAdvanced { get; set; }
     public int GearCount { get; set; } = 24;

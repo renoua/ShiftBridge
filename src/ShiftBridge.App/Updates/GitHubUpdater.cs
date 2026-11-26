@@ -15,6 +15,8 @@ namespace ShiftBridge.App.Updates;
 internal sealed class GitHubUpdater : IAppUpdater
 {
     private const string LatestUrl = "https://api.github.com/repos/renoua/ShiftBridge/releases/latest";
+    /// <summary>Liste des releases récentes : seule façon de voir les préversions, que /releases/latest ignore.</summary>
+    private const string ListUrl = "https://api.github.com/repos/renoua/ShiftBridge/releases?per_page=30";
     /// <summary>Remplace l'adresse de l'API (tests locaux : un latest.json servi en HTTP sur localhost).</summary>
     private const string FeedOverrideVariable = "SHIFTBRIDGE_UPDATE_FEED";
 
@@ -39,13 +41,20 @@ internal sealed class GitHubUpdater : IAppUpdater
         return c;
     }
 
-    public async Task<UpdateInfo?> CheckAsync(CancellationToken ct)
+    public async Task<UpdateInfo?> CheckAsync(bool includePrereleases, CancellationToken ct)
     {
-        string url = Environment.GetEnvironmentVariable(FeedOverrideVariable) is { Length: > 0 } o ? o : LatestUrl;
+        if (Environment.GetEnvironmentVariable(FeedOverrideVariable) is { Length: > 0 } feed)
+            return ReleaseParser.Parse(await GetAsync(feed, ct), _current, includePrereleases: includePrereleases);
+        return includePrereleases
+            ? ReleaseParser.ParseReleases(await GetAsync(ListUrl, ct), _current, ReleaseParser.DefaultAssetName, includePrereleases: true)
+            : ReleaseParser.Parse(await GetAsync(LatestUrl, ct), _current);
+    }
+
+    private static async Task<string> GetAsync(string url, CancellationToken ct)
+    {
         using var response = await Http.GetAsync(url, ct);
         response.EnsureSuccessStatusCode();
-        string json = await response.Content.ReadAsStringAsync(ct);
-        return ReleaseParser.Parse(json, _current);
+        return await response.Content.ReadAsStringAsync(ct);
     }
 
     public bool CanSelfUpdate(UpdateInfo update)

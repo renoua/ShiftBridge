@@ -128,6 +128,7 @@ public sealed partial class MainViewModel : ObservableObject
         _minimizeToTray = _config.MinimizeToTray;
         _startWithWindows = _config.StartWithWindows;
         _checkForUpdates = _config.CheckForUpdates;
+        _includePrereleases = _config.IncludePrereleases;
         _selectedLanguage = LanguageOptions.First(o => o.Code == AppLanguage.Normalize(_config.Language));
         _selectedRepeatSpeed = RepeatSpeedOptions.First(o => o.Speed == _config.RepeatSpeed);
         _loading = false;
@@ -1613,6 +1614,8 @@ public sealed partial class MainViewModel : ObservableObject
     private int _updateCheckInProgress;
 
     [ObservableProperty] private bool _checkForUpdates;
+    /// <summary>Recevoir aussi les versions de test (préversions GitHub).</summary>
+    [ObservableProperty] private bool _includePrereleases;
     [ObservableProperty] private bool _updateAvailable;
     /// <summary>Une version plus récente existe (même si le bandeau de l'Accueil a été masqué par « Plus tard ») : boutons des Réglages.</summary>
     [ObservableProperty] private bool _hasPendingUpdate;
@@ -1630,6 +1633,13 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (_loading) return;
         _config.CheckForUpdates = value;
+        SaveConfig();
+    }
+
+    partial void OnIncludePrereleasesChanged(bool value)
+    {
+        if (_loading) return;
+        _config.IncludePrereleases = value;
         SaveConfig();
     }
 
@@ -1660,7 +1670,7 @@ public sealed partial class MainViewModel : ObservableObject
         try
         {
             _ui.Post(() => { IsCheckingUpdates = true; if (manual) UpdateStatus = ""; });
-            var update = await checker.CheckAsync(_updateCts.Token);
+            var update = await checker.CheckAsync(IncludePrereleases, _updateCts.Token);
             _ui.Post(() =>
             {
                 _pendingUpdate = update;
@@ -1671,7 +1681,7 @@ public sealed partial class MainViewModel : ObservableObject
                     if (manual) UpdateStatus = Loc.Fmt(Strings.Update_UpToDate, _host.AppVersion);
                     return;
                 }
-                UpdateText = Loc.Fmt(Strings.Update_Available, update.Version.ToString());
+                UpdateText = Loc.Fmt(update.IsPrerelease ? Strings.Update_AvailablePrerelease : Strings.Update_Available, update.Version.ToString());
                 UpdateStatus = UpdateText;
                 if (!_updateDismissed || manual) { _updateDismissed = false; UpdateAvailable = true; }
             });

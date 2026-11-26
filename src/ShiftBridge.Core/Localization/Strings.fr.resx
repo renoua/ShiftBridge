@@ -624,6 +624,7 @@
   <data name="Common_Info" xml:space="preserve"><value>Plus d'informations</value></data>
   <data name="Common_Close" xml:space="preserve"><value>Fermer</value></data>
   <data name="Update_Available" xml:space="preserve"><value>ShiftBridge {0} est disponible</value></data>
+  <data name="Update_AvailablePrerelease" xml:space="preserve"><value>Version de test ShiftBridge {0} disponible</value></data>
   <data name="Update_Install" xml:space="preserve"><value>Mettre à jour</value></data>
   <data name="Update_Notes" xml:space="preserve"><value>Notes de version</value></data>
   <data name="Update_Later" xml:space="preserve"><value>Plus tard</value></data>
@@ -632,6 +633,8 @@
   <data name="Update_ConfirmProxy" xml:space="preserve"><value>Le virtual shifting est actif. La mise à jour va déconnecter vos manettes quelques secondes, le temps que ShiftBridge redémarre. Continuer ?</value></data>
   <data name="Settings_SecUpdates" xml:space="preserve"><value>Mises à jour</value></data>
   <data name="Settings_CheckUpdates" xml:space="preserve"><value>Rechercher les mises à jour automatiquement</value></data>
+  <data name="Settings_IncludePrereleases" xml:space="preserve"><value>Recevoir aussi les versions de test</value></data>
+  <data name="Settings_IncludePrereleasesHelp" xml:space="preserve"><value>Versions publiées pour essai avant tout le monde : nouveautés plus tôt, mais elles peuvent contenir des défauts. Décochez pour revenir aux seules versions stables (à la suivante).</value></data>
   <data name="Settings_CheckNow" xml:space="preserve"><value>Rechercher maintenant</value></data>
   <data name="Update_UpToDate" xml:space="preserve"><value>ShiftBridge est à jour (v{0}).</value></data>
   <data name="Update_CheckFailed" xml:space="preserve"><value>Impossible de rechercher les mises à jour.</value></data>

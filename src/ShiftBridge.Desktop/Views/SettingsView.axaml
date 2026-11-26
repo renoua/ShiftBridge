@@ -18,6 +18,8 @@
         <StackPanel Spacing="10">
           <TextBlock Classes="section" Text="{x:Static loc:Strings.Settings_SecUpdates}" />
           <CheckBox Content="{x:Static loc:Strings.Settings_CheckUpdates}" IsChecked="{Binding CheckForUpdates}" />
+          <CheckBox Content="{x:Static loc:Strings.Settings_IncludePrereleases}" IsChecked="{Binding IncludePrereleases}"
+                    ToolTip.Tip="{x:Static loc:Strings.Settings_IncludePrereleasesHelp}" />
           <WrapPanel>
             <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Settings_CheckNow}" Command="{Binding CheckUpdatesNowCommand}" />
             <Button Content="{x:Static loc:Strings.Mac_ReleaseDownloads}" Command="{Binding OpenReleaseDownloadsCommand}" />

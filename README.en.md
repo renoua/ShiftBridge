@@ -47,7 +47,7 @@ Only one instance of ShiftBridge can run at a time. Controller scanning stops by
 
 At launch and then every 24 h, ShiftBridge checks the latest GitHub release. If a newer version exists, a banner appears on Home: **Update** downloads the new `exe`, verifies its SHA-256 (published by GitHub), replaces the exe in place and restarts; **Release notes** opens the release page. If the exe's folder is not writable, the button opens the release page for a manual replacement. The check can be turned off in **Settings → Updates** (one anonymous request to `api.github.com`, see [PRIVACY.md](PRIVACY.md)). On Android, the Play Store handles updates.
 
-To publish: create the GitHub release with the file **`ShiftBridge.exe`** (exact name) and a `vX.Y.Z` tag. Pre-releases and drafts are ignored. To test without publishing: `SHIFTBRIDGE_UPDATE_FEED=http://localhost:8000/latest.json` replaces the API address.
+To publish: create the GitHub release with the file **`ShiftBridge.exe`** (exact name) and a `vX.Y.Z` tag. Drafts are ignored. **Test versions**: publish the release as a *pre-release* (`gh release create … --prerelease`, tag still numeric `vX.Y.Z`); only users who ticked **Settings → Updates → Also receive test versions** are offered it, everyone else stays on the latest stable version. Once validated, mark it stable (`gh release edit vX.Y.Z --prerelease=false --latest`) to offer it to everyone. To test without publishing: `SHIFTBRIDGE_UPDATE_FEED=http://localhost:8000/latest.json` replaces the API address.
 
 ## macOS
 
@@ -80,7 +80,7 @@ These controllers lock about a minute after connecting if Zwift has not "unlocke
 
 | Feature | Status |
 |---|---|
-| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (642 automated tests, hand-built frames) |
+| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (646 automated tests, hand-built frames) |
 | UI language: French if the system is in French (fr-FR, fr-BE, fr-CH, fr-CA…), English otherwise; Automatic / Français / English selector in the advanced options (applied on restart). Texts are in `src/ShiftBridge.Core/Localization/Strings.resx` (English) and `Strings.fr.resx` (French). The Diagnostic log stays in French | Tested (resource consistency, language choice, label rendering); **on-screen rendering not verified** (Windows and Android) |
 | Keyboard, HID remotes, Xbox controllers and joysticks (Windows): open key identity, multi-device merging, XInput/HID mapping, chain up to OBC | Tested with a fake provider |
 | Nintendo Switch Pro Controller over Bluetooth (full 0x30 report, decoding verified on real reports) | Tested on real hardware: buttons, d-pad, sticks, L/R, ZL/ZR |

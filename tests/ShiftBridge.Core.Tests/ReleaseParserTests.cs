@@ -115,4 +115,41 @@ public class ReleaseParserTests
         Assert.Equal(new Version(0, 17, 0), ReleaseParser.ParseReleases($"[{older},{newer}]", Current, MacAsset)?.Version);
         Assert.Null(ReleaseParser.ParseReleases($"[{older}]", Current, MacAsset));
     }
+
+    // ---------- Versions de test (préversions GitHub) ----------
+
+    [Fact]
+    public void Prerelease_is_offered_only_to_those_who_opted_in()
+    {
+        var u = ReleaseParser.Parse(Json(prerelease: true), Current, includePrereleases: true);
+        Assert.NotNull(u);
+        Assert.True(u!.IsPrerelease);
+        Assert.False(ReleaseParser.Parse(Json(), Current, includePrereleases: true)!.IsPrerelease);
+    }
+
+    [Fact]
+    public void Draft_stays_ignored_even_with_prereleases() =>
+        Assert.Null(ReleaseParser.Parse(Json(draft: true, prerelease: true), Current, includePrereleases: true));
+
+    [Fact]
+    public void List_picks_the_newest_of_stable_and_test_versions()
+    {
+        string stable = Json("v0.17.0");
+        string test = Json("v0.18.0", prerelease: true);
+        string all = $"[{test},{stable}]";
+
+        Assert.Equal(new Version(0, 17, 0), ReleaseParser.ParseReleases(all, Current, ReleaseParser.DefaultAssetName)?.Version);
+        var u = ReleaseParser.ParseReleases(all, Current, ReleaseParser.DefaultAssetName, includePrereleases: true);
+        Assert.Equal(new Version(0, 18, 0), u?.Version);
+        Assert.True(u!.IsPrerelease);
+    }
+
+    [Fact]
+    public void A_stable_release_newer_than_the_test_version_wins()
+    {
+        string all = $"[{Json("v0.19.0")},{Json("v0.18.0", prerelease: true)}]";
+        var u = ReleaseParser.ParseReleases(all, Current, ReleaseParser.DefaultAssetName, includePrereleases: true);
+        Assert.Equal(new Version(0, 19, 0), u?.Version);
+        Assert.False(u!.IsPrerelease);
+    }
 }

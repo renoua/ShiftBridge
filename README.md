@@ -47,7 +47,7 @@ Une seule instance de ShiftBridge peut tourner à la fois. La recherche des mane
 
 Au lancement puis toutes les 24 h, ShiftBridge consulte la dernière release GitHub. Si une version plus récente existe, un bandeau apparaît sur l'Accueil : **Mettre à jour** télécharge le nouvel `exe`, vérifie son SHA-256 (publié par GitHub), remplace l'exe en place et redémarre ; **Notes de version** ouvre la page de la release. Si le dossier de l'exe n'est pas inscriptible, le bouton ouvre la page de la release pour un remplacement manuel. La vérification se désactive dans **Réglages → Mises à jour** (une requête anonyme vers `api.github.com`, voir [PRIVACY.md](PRIVACY.md)). Sous Android, c'est le Play Store qui met à jour l'application.
 
-Pour publier : créer la release GitHub avec le fichier **`ShiftBridge.exe`** (ce nom exact) et un tag `vX.Y.Z`. Les préversions et brouillons sont ignorés. Pour tester sans publier : `SHIFTBRIDGE_UPDATE_FEED=http://localhost:8000/latest.json` remplace l'adresse de l'API.
+Pour publier : créer la release GitHub avec le fichier **`ShiftBridge.exe`** (ce nom exact) et un tag `vX.Y.Z`. Les brouillons sont ignorés. **Versions de test** : publiez la release en *préversion* (`gh release create … --prerelease`, tag toujours numérique `vX.Y.Z`) ; seuls les utilisateurs qui ont coché **Réglages → Mises à jour → Recevoir aussi les versions de test** se la voient proposer, les autres restent sur la dernière version stable. Une fois validée, passez-la en version stable (`gh release edit vX.Y.Z --prerelease=false --latest`) pour la proposer à tous. Pour tester sans publier : `SHIFTBRIDGE_UPDATE_FEED=http://localhost:8000/latest.json` remplace l'adresse de l'API.
 
 ## macOS
 
@@ -80,7 +80,7 @@ Ces manettes se verrouillent environ une minute après la connexion si Zwift ne 
 
 | Fonction | État |
 |---|---|
-| Analyse des trames Play / Click / Ride, mapping, vitesse virtuelle, répétition sur appui long, cycle de vie (déconnexion, arrêt, clients bloqués, configuration) | Testé (642 tests automatisés, trames construites à la main) |
+| Analyse des trames Play / Click / Ride, mapping, vitesse virtuelle, répétition sur appui long, cycle de vie (déconnexion, arrêt, clients bloqués, configuration) | Testé (646 tests automatisés, trames construites à la main) |
 | Langue de l'interface : français si le système est en français (fr-FR, fr-BE, fr-CH, fr-CA…), anglais sinon ; sélecteur Automatique / Français / English dans les options avancées (pris en compte au redémarrage). Les textes sont dans `src/ShiftBridge.Core/Localization/Strings.resx` (anglais) et `Strings.fr.resx` (français). Le journal Diagnostic reste en français | Testé (cohérence des ressources, choix de la langue, rendu des libellés) ; **rendu à l'écran non vérifié** (Windows et Android) |
 | Clavier, télécommandes HID, manettes Xbox et joysticks (Windows) : identité de touche ouverte, fusion multi-périphériques, mapping XInput/HID, chaîne jusqu'à l'OBC | Testé avec un faux fournisseur d'entrées |
 | Manette Nintendo Switch Pro Controller en Bluetooth (rapport complet 0x30, décodage vérifié sur des rapports réels) | Testé sur matériel réel : boutons, croix, sticks, L/R, ZL/ZR |

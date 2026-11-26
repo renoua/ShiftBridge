@@ -13,14 +13,14 @@ internal sealed class MacReleaseChecker(Version currentVersion) : IAppUpdateChec
 
     private static readonly HttpClient Http = CreateClient();
 
-    public async Task<UpdateInfo?> CheckAsync(CancellationToken ct)
+    public async Task<UpdateInfo?> CheckAsync(bool includePrereleases, CancellationToken ct)
     {
         // Les 100 releases les plus récentes suffisent : le DMG peut manquer sur une release (Windows/Android seuls),
         // d'où la liste plutôt que /releases/latest.
         using var response = await Http.GetAsync($"{ReleasesApi}?per_page=100", ct);
         response.EnsureSuccessStatusCode();
         string json = await response.Content.ReadAsStringAsync(ct);
-        return ReleaseParser.ParseReleases(json, currentVersion, AssetName);
+        return ReleaseParser.ParseReleases(json, currentVersion, AssetName, includePrereleases: includePrereleases);
     }
 
     private static HttpClient CreateClient()

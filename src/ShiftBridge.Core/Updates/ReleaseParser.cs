@@ -4,7 +4,8 @@ namespace ShiftBridge.Core.Updates;
 
 /// <summary>Une version plus récente publiée sur GitHub Releases.</summary>
 /// <param name="Sha256">Empreinte SHA-256 en hexadécimal minuscule ; null si la release ne la fournit pas (mise à jour en un clic impossible).</param>
-public sealed record UpdateInfo(Version Version, string PageUrl, string DownloadUrl, long Size, string? Sha256);
+/// <param name="IsPrerelease">Version de test (« pre-release » GitHub), proposée seulement à qui l'a demandé.</param>
+public sealed record UpdateInfo(Version Version, string PageUrl, string DownloadUrl, long Size, string? Sha256, bool IsPrerelease = false);
 
 /// <summary>Lit les versions publiées par l'API GitHub Releases.</summary>
 public static class ReleaseParser
@@ -12,24 +13,27 @@ public static class ReleaseParser
     public const string DefaultAssetName = "ShiftBridge.exe";
 
     /// <summary>
-    /// La mise à jour proposée, ou null si la release n'est pas plus récente que <paramref name="current"/>, si c'est un brouillon
-    /// ou une préversion, si le fichier attendu est absent ou si le JSON est illisible. Ne lève jamais d'exception.
+    /// La mise à jour proposée, ou null si la release n'est pas plus récente que <paramref name="current"/>, si c'est un brouillon,
+    /// une préversion (sauf <paramref name="includePrereleases"/>), si le fichier attendu est absent ou si le JSON est illisible.
+    /// Ne lève jamais d'exception.
     /// </summary>
-    public static UpdateInfo? Parse(string json, Version current, string assetName = DefaultAssetName)
+    public static UpdateInfo? Parse(string json, Version current, string assetName = DefaultAssetName, bool includePrereleases = false)
     {
         try
         {
             using var doc = JsonDocument.Parse(json);
-            return ParseRelease(doc.RootElement, current, assetName);
+            return ParseRelease(doc.RootElement, current, assetName, includePrereleases);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException) { return null; }
     }
 
     /// <summary>
-    /// Cherche, sur une page de l'API (liste de releases), la version stable la plus récente qui publie <paramref name="assetName"/>.
+    /// Cherche, sur une page de l'API (liste de releases), la version la plus récente qui publie <paramref name="assetName"/> :
+    /// stable seulement, ou stable et préversions avec <paramref name="includePrereleases"/>.
     /// <paramref name="executableTimestamp"/> (facultatif) écarte en plus les fichiers envoyés avant cette date.
     /// </summary>
-    public static UpdateInfo? ParseReleases(string json, Version current, string assetName, DateTimeOffset? executableTimestamp = null)
+    public static UpdateInfo? ParseReleases(string json, Version current, string assetName, DateTimeOffset? executableTimestamp = null,
+        bool includePrereleases = false)
     {
         try
         {
@@ -39,7 +43,7 @@ public static class ReleaseParser
             UpdateInfo? newest = null;
             foreach (var release in doc.RootElement.EnumerateArray())
             {
-                var update = ParseRelease(release, current, assetName, executableTimestamp);
+                var update = ParseRelease(release, current, assetName, includePrereleases, executableTimestamp);
                 if (update is not null && (newest is null || Normalize(update.Version) > Normalize(newest.Version)))
                     newest = update;
             }
@@ -48,10 +52,12 @@ public static class ReleaseParser
         catch (Exception ex) when (ex is JsonException or InvalidOperationException) { return null; }
     }
 
-    private static UpdateInfo? ParseRelease(JsonElement release, Version current, string assetName,
+    private static UpdateInfo? ParseRelease(JsonElement release, Version current, string assetName, bool includePrereleases,
         DateTimeOffset? executableTimestamp = null)
     {
-        if (release.ValueKind != JsonValueKind.Object || Bool(release, "draft") || Bool(release, "prerelease")) return null;
+        if (release.ValueKind != JsonValueKind.Object || Bool(release, "draft")) return null;
+        bool prerelease = Bool(release, "prerelease");
+        if (prerelease && !includePrereleases) return null;
         string? tag = Str(release, "tag_name");
         if (tag is null || !Version.TryParse(tag.TrimStart('v', 'V'), out var version)) return null;
         if (Normalize(version) <= Normalize(current)) return null;
@@ -67,7 +73,7 @@ public static class ReleaseParser
             string? url = Str(asset, "browser_download_url");
             if (url is null || !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase) && !IsLoopbackHttp(url)) return null;
             long size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out long n) ? n : 0;
-            return new UpdateInfo(version, pageUrl, url, size, ParseDigest(Str(asset, "digest")));
+            return new UpdateInfo(version, pageUrl, url, size, ParseDigest(Str(asset, "digest")), prerelease);
         }
         return null;
     }

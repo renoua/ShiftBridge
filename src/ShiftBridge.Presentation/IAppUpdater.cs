@@ -5,8 +5,11 @@ namespace ShiftBridge.Presentation;
 /// <summary>Recherche une version plus récente de l'application hôte.</summary>
 public interface IAppUpdateChecker
 {
-    /// <summary>La version publiée si elle est plus récente que celle qui tourne ; null sinon. Lève une exception si le réseau échoue.</summary>
-    Task<UpdateInfo?> CheckAsync(CancellationToken ct);
+    /// <summary>
+    /// La version publiée si elle est plus récente que celle qui tourne ; null sinon. Les préversions GitHub ne sont prises en compte
+    /// qu'avec <paramref name="includePrereleases"/> (versions de test). Lève une exception si le réseau échoue.
+    /// </summary>
+    Task<UpdateInfo?> CheckAsync(bool includePrereleases, CancellationToken ct);
 }
 
 /// <summary>Mise à jour de l'application hôte (Windows : exe unique remplacé en place).</summary>
