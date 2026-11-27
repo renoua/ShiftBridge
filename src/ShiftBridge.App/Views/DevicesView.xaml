@@ -119,7 +119,11 @@
                         <Button Content="{x:Static loc:Strings.Hr_Disconnect}" Command="{Binding DisconnectHeartRateCommand}"
                                 Visibility="{Binding HeartRateConnected, Converter={StaticResource BoolToVis}}" />
                     </StackPanel>
-                    <ListBox ItemsSource="{Binding FoundHeartRateSensors}" SelectedItem="{Binding SelectedHeartRateSensor}" MinHeight="40" MaxHeight="130" />
+                    <Grid>
+                        <ListBox x:Name="HeartRateList" ItemsSource="{Binding FoundHeartRateSensors}" SelectedItem="{Binding SelectedHeartRateSensor}" MinHeight="40" MaxHeight="130" />
+                        <TextBlock Text="{x:Static loc:Strings.List_HrEmpty}" Style="{StaticResource Caption}" Margin="10,8" IsHitTestVisible="False"
+                                   Visibility="{Binding HasItems, ElementName=HeartRateList, Converter={StaticResource InvBoolToVis}}" />
+                    </Grid>
                     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                         <controls:StatusBadge State="{Binding HeartRateState}" Margin="0,0,10,0" />
                         <TextBlock Text="{Binding HeartRateStatus}" Style="{StaticResource Caption}" VerticalAlignment="Center" />

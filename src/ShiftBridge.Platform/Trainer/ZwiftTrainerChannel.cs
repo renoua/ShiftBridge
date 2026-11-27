@@ -36,6 +36,11 @@ public sealed class ZwiftTrainerChannel : IAsyncDisposable
     private List<TaskCompletionSource<bool>> _gearWaiters = [];
     private bool _gearPumping;
     private readonly List<(double Ratio, long Tick)> _expected = [];
+    private double _lastConfirmed;
+    private long _lastConfirmedTick;
+
+    /// <summary>Délai pendant lequel une seconde confirmation du même rapport, sans requête en attente, est un doublon.</summary>
+    internal const int DuplicateReplyWindowMs = 500;
 
     /// <summary>Mesures « rapport envoyé → confirmation du trainer » (optionnel).</summary>
     public LatencyTracker? Latency { get; set; }
@@ -289,13 +294,24 @@ public sealed class ZwiftTrainerChannel : IAsyncDisposable
             {
                 // Les réponses arrivent dans l'ordre mais en retard : on la rapproche de la requête qui l'a provoquée (et non du
                 // dernier rapport demandé). Une réponse qui correspond à une requête plus récente écarte les plus anciennes.
+                // Le trainer répond souvent deux fois au même rapport : un doublon de la dernière confirmation, arrivé peu après
+                // et qui ne correspond à aucune requête en attente, est ignoré. Sinon il consommerait la requête suivante (fausse
+                // alerte « a retenu… », latence faussée) et la vraie réponse à celle-ci n'aurait plus rien à rapprocher.
                 double asked; long sentTick = 0;
+                long now = Environment.TickCount64;
                 lock (_lock)
                 {
                     int idx = _expected.FindIndex(e => e.Ratio > 0 && Math.Abs(confirmed / e.Ratio - 1) < 0.01);
+                    if (idx < 0 && _lastConfirmed > 0 && Math.Abs(confirmed / _lastConfirmed - 1) < 0.01
+                        && now - _lastConfirmedTick < DuplicateReplyWindowMs)
+                    {
+                        _lastConfirmedTick = now;
+                        return;
+                    }
                     if (idx >= 0) { (asked, sentTick) = _expected[idx]; _expected.RemoveRange(0, idx + 1); }
                     else if (_expected.Count > 0) { (asked, sentTick) = _expected[0]; _expected.RemoveAt(0); }
                     else asked = _gearRatio;
+                    _lastConfirmed = confirmed; _lastConfirmedTick = now;
                 }
                 bool same = asked > 0 && Math.Abs(confirmed / asked - 1) < 0.01;
                 if (same && sentTick > 0) Latency?.Add("natif", Environment.TickCount64 - sentTick);

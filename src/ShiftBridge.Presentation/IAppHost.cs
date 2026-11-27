@@ -25,6 +25,19 @@ public interface IAppHost
     /// <summary>Bluetooth allumé ? Toujours vrai là où l'hôte ne peut pas le savoir (Windows).</summary>
     bool IsBluetoothOn => true;
 
+    /// <summary>Écran tactile (Android) : « Touchez » plutôt que « Cliquez » dans les textes d'aide.</summary>
+    bool IsTouch => false;
+
+    /// <summary>Icône de zone de notification, démarrage avec le système et superposition (Windows).</summary>
+    bool SupportsTray => false;
+
+    /// <summary>
+    /// L'application demande des permissions au système (Android) : l'assistant les explique, puis les demande via
+    /// <see cref="RequestPermissionsAsync"/> au lieu de les demander sans explication au lancement.
+    /// </summary>
+    bool AsksPermissions => false;
+    Task RequestPermissionsAsync() => Task.CompletedTask;
+
     /// <summary>Affiche la demande système d'activation du Bluetooth. La reprise passe par <c>MainViewModel.OnBluetoothTurnedOn</c>.</summary>
     void RequestBluetoothOn() { }
     bool PromptForBluetoothOnAutomatically => true;
@@ -44,6 +57,12 @@ public interface IAppHost
     /// <summary>Question oui/non asynchrone (la boîte de dialogue mobile ne bloque pas le thread). Par défaut : <see cref="Confirm"/>.</summary>
     Task<bool> ConfirmAsync(string message) => Task.FromResult(Confirm(message));
 
+    /// <summary>
+    /// Question dont le bouton de validation nomme l'action (« Oublier », « Supprimer »…) plutôt qu'un « OK » générique.
+    /// Par défaut (boîte Oui / Non de Windows) : <see cref="ConfirmAsync(string)"/>.
+    /// </summary>
+    Task<bool> ConfirmAsync(string message, string confirmLabel) => ConfirmAsync(message);
+
     /// <summary>Demande une ligne de texte (valeur initiale proposée). Null si l'utilisateur annule ou si l'hôte n'a pas de saisie.</summary>
     Task<string?> PromptTextAsync(string message, string initial) => Task.FromResult<string?>(null);
 
@@ -55,4 +74,16 @@ public interface IAppHost
 
     /// <summary>Ouvre une adresse https dans le navigateur par défaut ; ne lève jamais d'exception.</summary>
     void OpenUrl(string url) { }
+
+    /// <summary>
+    /// Enregistre un texte dans un fichier choisi par l'utilisateur (boîte « Enregistrer sous », ou partage sous Android).
+    /// Faux si l'utilisateur annule ou si l'hôte ne sait pas le faire.
+    /// </summary>
+    Task<bool> SaveTextFileAsync(string suggestedName, string content) => Task.FromResult(false);
+
+    /// <summary>Lit un fichier texte choisi par l'utilisateur ; null s'il annule ou si l'hôte ne sait pas le faire.</summary>
+    Task<string?> OpenTextFileAsync() => Task.FromResult<string?>(null);
+
+    /// <summary>Relance l'application (après un import de réglages). Faux si l'hôte ne sait pas le faire : l'utilisateur relance lui-même.</summary>
+    bool Restart() => false;
 }

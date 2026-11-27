@@ -17,10 +17,15 @@ public class MainActivity : MauiAppCompatActivity
     internal const int BluetoothEnableRequestCode = 4002;
 
     private BluetoothStateReceiver? _bluetoothReceiver;
+    private TaskCompletionSource? _permissionRequest;
+
+    /// <summary>Activité affichée (demande de permissions lancée par l'assistant de démarrage).</summary>
+    internal static MainActivity? Current { get; private set; }
 
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+        Current = this;
 
         // Suit l'état du Bluetooth : la demande d'activation, les réglages rapides et les réglages système aboutissent tous ici.
         _bluetoothReceiver = new BluetoothStateReceiver();
@@ -29,7 +34,18 @@ public class MainActivity : MauiAppCompatActivity
         var missing = BridgePermissions.Missing(this);
         UpdatePermissionBanner();
         if (missing.Count == 0) StartBridge();
-        else RequestPermissions([.. missing], PermissionRequestCode);
+        // Premier lancement : l'assistant explique d'abord pourquoi, puis demande (RequestBridgePermissionsAsync).
+        else if (!AppRuntime.ViewModel.IsOnboarding) RequestPermissions([.. missing], PermissionRequestCode);
+    }
+
+    /// <summary>Demande les permissions manquantes (assistant de démarrage) ; terminé quand l'utilisateur a répondu.</summary>
+    internal Task RequestBridgePermissionsAsync()
+    {
+        var missing = BridgePermissions.Missing(this);
+        if (missing.Count == 0) { StartBridge(); return Task.CompletedTask; }
+        var request = _permissionRequest = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        RequestPermissions([.. missing], PermissionRequestCode);
+        return request.Task;
     }
 
     public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Permission[] grantResults)
@@ -41,11 +57,15 @@ public class MainActivity : MauiAppCompatActivity
         {
             UpdatePermissionBanner();
             StartBridge();
+            _permissionRequest?.TrySetResult();
+            _permissionRequest = null;
         }
     }
 
     protected override void OnDestroy()
     {
+        if (Current == this) Current = null;
+        _permissionRequest?.TrySetResult(); // l'assistant n'attend pas une réponse qui ne viendra plus
         if (_bluetoothReceiver is not null)
         {
             try { UnregisterReceiver(_bluetoothReceiver); } catch { /* déjà désenregistré */ }
@@ -87,8 +107,12 @@ public class MainActivity : MauiAppCompatActivity
         AppRuntime.ViewModel.SetBluetoothOff(!AndroidBlePlatform.IsBluetoothOn(this));
     }
 
+    private bool _bridgeStarted;
+
     private void StartBridge()
     {
+        if (_bridgeStarted) return; // l'assistant et le retour de la demande de permissions peuvent tous deux le demander
+        _bridgeStarted = true;
         try
         {
             var intent = new Intent(this, typeof(BridgeForegroundService));

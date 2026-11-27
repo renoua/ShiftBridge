@@ -54,10 +54,33 @@ public class BikeDataTests
         Assert.Null(m.TakeSummary(0));
         m.Add(1000, 150); m.Add(1250, 160); m.Add(1300, 170);
         var s = m.TakeSummary(1400);
-        Assert.Contains("3 relayées", s);
+        Assert.Contains("3 reçues", s);
+        Assert.DoesNotContain("relayées", s);                                                       // toutes relayées : rien à signaler
         Assert.Contains("plus long silence 250 ms", s);
         Assert.Contains("dernière puissance 170 W", s);
         Assert.Null(m.TakeSummary(1500));
+    }
+
+    [Fact]
+    public void Monitor_stays_quiet_while_the_flow_is_healthy_and_reports_a_full_stall()
+    {
+        var m = new BikeDataMonitor();
+        m.Add(0, 100); Assert.NotNull(m.TakeSummary(100));                                         // premier résumé : toujours
+        for (long t = 500; t <= 30_000; t += 500) m.Add(t, 100);
+        Assert.Null(m.TakeSummary(30_100));                                                         // flux régulier : silence
+        m.Add(30_200, 100);
+        Assert.NotNull(m.TakeSummary(30_300, verbose: true));                                       // journal détaillé : toujours
+
+        var stall = m.TakeSummary(60_000);                                                          // plus rien depuis ~30 s
+        Assert.Contains("Aucune mesure du trainer depuis", stall);
+    }
+
+    [Fact]
+    public void Monitor_reports_measurements_not_relayed_to_the_app()
+    {
+        var m = new BikeDataMonitor();
+        m.Add(0, 100, relayed: false); m.Add(500, 100, relayed: false);
+        Assert.Contains("(0 relayées à l'appli)", m.TakeSummary(600));
     }
 
     [Fact]

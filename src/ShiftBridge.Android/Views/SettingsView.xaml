@@ -46,6 +46,22 @@
                 </VerticalStackLayout>
             </Border>
 
+            <!-- Sauvegarde : export / import des réglages, assignations et profils -->
+            <Border Style="{StaticResource Card}">
+                <VerticalStackLayout Spacing="8">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                        <Label Text="{x:Static ctl:Icons.Backup}" FontFamily="MaterialIcons" FontSize="22" TextColor="{StaticResource Accent}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="{x:Static loc:Strings.Backup_Title}" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
+                    </Grid>
+                    <Label Style="{StaticResource Caption}" Text="{x:Static loc:Strings.Backup_Help}" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Button Text="{x:Static loc:Strings.Backup_Export}" Command="{Binding ExportSettingsCommand}" />
+                        <Button Text="{x:Static loc:Strings.Backup_Import}" Command="{Binding ImportSettingsCommand}" />
+                    </HorizontalStackLayout>
+                    <Label Text="{Binding BackupStatus}" Style="{StaticResource Caption}" IsVisible="{Binding BackupStatus, Converter={StaticResource HasText}}" />
+                </VerticalStackLayout>
+            </Border>
+
             <!-- Outils : journal de diagnostic -->
             <Border Style="{StaticResource Card}">
                 <VerticalStackLayout Spacing="8">
@@ -54,6 +70,7 @@
                         <Label Grid.Column="1" Text="{x:Static loc:Strings.Settings_SecTools}" Style="{StaticResource SectionTitle}" Margin="0" VerticalOptions="Center" />
                     </Grid>
                     <Button Text="{x:Static loc:Strings.Settings_OpenDiagnostic}" Command="{Binding NavigateCommand}" CommandParameter="diagnostic" HorizontalOptions="Start" />
+                    <Button Text="{x:Static loc:Strings.Settings_OpenOnboarding}" Command="{Binding OpenOnboardingCommand}" HorizontalOptions="Start" />
                     <Label Style="{StaticResource Caption}" Text="{x:Static loc:Strings.Settings_ToolsHelp}" />
                     <Button Text="{x:Static loc:Strings.Settings_PrivacyPolicy}" Command="{Binding OpenPrivacyPolicyCommand}" HorizontalOptions="Start" Margin="0,8,0,0" />
                     <Label Style="{StaticResource Caption}" Text="{x:Static loc:Strings.Settings_PrivacyHelp}" />

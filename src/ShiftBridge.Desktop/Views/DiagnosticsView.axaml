@@ -2,8 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="using:ShiftBridge.Core.Localization"
              xmlns:vm="using:ShiftBridge.Presentation"
-             x:Class="ShiftBridge.Desktop.Views.DiagnosticsView" x:DataType="vm:MainViewModel">
-  <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="10" Margin="0,18,0,24">
+             x:Class="ShiftBridge.Desktop.Views.DiagnosticsView" x:DataType="vm:MainViewModel" x:Name="DiagPage">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="10" Margin="0,18,0,24">
     <StackPanel Spacing="4">
       <TextBlock Classes="title" Text="{x:Static loc:Strings.Nav_Diagnostic}" />
       <TextBlock Classes="detail" Text="{x:Static loc:Strings.Diag_Intro}" />
@@ -12,11 +12,43 @@
       <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Diag_Copy}" Command="{Binding CopyLogCommand}" />
       <Button Margin="0,0,12,0" Content="{x:Static loc:Strings.Diag_Clear}" Command="{Binding ClearLogCommand}" />
       <CheckBox Content="{x:Static loc:Strings.Diag_Verbose}" IsChecked="{Binding VerboseFrames}" />
+      <TextBlock Classes="detail" Foreground="#2BD46A" VerticalAlignment="Center" Margin="12,0,0,0" Text="{Binding LogStatus}" />
     </WrapPanel>
-    <TextBox Grid.Row="2" Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+    <!-- Inspecteur Bluetooth : capturer les trames d'une télécommande encore inconnue -->
+    <Expander Grid.Row="2" Header="{x:Static loc:Strings.Inspect_Title}" HorizontalAlignment="Stretch">
+      <StackPanel Spacing="8">
+        <TextBlock Classes="detail" Text="{x:Static loc:Strings.Inspect_Intro}" />
+        <WrapPanel>
+          <Button Margin="0,0,8,0" Content="{Binding InspectorScanText}" Command="{Binding ToggleInspectorScanCommand}" />
+          <Button Content="{x:Static loc:Strings.Inspect_StopCapture}" Command="{Binding StopInspectorCaptureCommand}" IsVisible="{Binding IsInspectorCapturing}" />
+        </WrapPanel>
+        <TextBlock Classes="detail" Text="{x:Static loc:Strings.Inspect_Empty}" IsVisible="{Binding InspectorEmpty}" />
+        <ScrollViewer MaxHeight="200">
+          <ItemsControl ItemsSource="{Binding InspectorDevices}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:InspectedDeviceRowViewModel">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="0,3">
+                  <StackPanel>
+                    <TextBlock FontWeight="SemiBold" Text="{Binding Title}" />
+                    <TextBlock Classes="detail" Text="{Binding Detail}" />
+                  </StackPanel>
+                  <Button Grid.Column="1" VerticalAlignment="Center" Content="{Binding ActionText}"
+                          Command="{Binding #DiagPage.DataContext.CaptureInspectedCommand}" CommandParameter="{Binding}" />
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </StackPanel>
+    </Expander>
+    <TextBox x:Name="LogBox" Grid.Row="3" Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
              FontFamily="Menlo,monospace" FontSize="12" TextWrapping="Wrap" AutomationProperties.Name="{x:Static loc:Strings.Nav_Diagnostic}" />
-    <Grid Grid.Row="3" ColumnDefinitions="*,Auto" ColumnSpacing="8">
-      <TextBox Text="{Binding NoteText}" PlaceholderText="{x:Static loc:Strings.Diag_NotePlaceholder}" />
+    <Grid Grid.Row="4" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+      <TextBox x:Name="NoteBox" Text="{Binding NoteText}" PlaceholderText="{x:Static loc:Strings.Diag_NotePlaceholder}">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding AddNoteCommand}" />
+        </TextBox.KeyBindings>
+      </TextBox>
       <Button Grid.Column="1" Content="{x:Static loc:Strings.Diag_Add}" Command="{Binding AddNoteCommand}" />
     </Grid>
   </Grid>

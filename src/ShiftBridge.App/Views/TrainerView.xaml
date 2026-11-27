@@ -56,8 +56,16 @@
 
                     <!-- Wi-Fi -->
                     <StackPanel Visibility="{Binding UseWifi, Converter={StaticResource BoolToVis}}">
-                        <Button Content="{x:Static loc:Strings.Trainer_BtnFind}" Command="{Binding FindTrainersCommand}" HorizontalAlignment="Left" Margin="0,0,0,10" />
-                        <ListBox ItemsSource="{Binding FoundTrainers}" SelectedItem="{Binding SelectedTrainer}" MinHeight="56" MaxHeight="140" />
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                            <Button Content="{x:Static loc:Strings.Trainer_BtnFind}" Command="{Binding FindTrainersCommand}" />
+                            <TextBlock Text="{x:Static loc:Strings.Wifi_Searching}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                       Visibility="{Binding IsSearchingTrainer, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                        <Grid>
+                            <ListBox x:Name="WifiTrainerList" ItemsSource="{Binding FoundTrainers}" SelectedItem="{Binding SelectedTrainer}" MinHeight="56" MaxHeight="140" />
+                            <TextBlock Text="{x:Static loc:Strings.List_TrainersEmpty}" Style="{StaticResource Caption}" Margin="10,8" IsHitTestVisible="False"
+                                       Visibility="{Binding HasItems, ElementName=WifiTrainerList, Converter={StaticResource InvBoolToVis}}" />
+                        </Grid>
                     </StackPanel>
 
                     <!-- Bluetooth -->
@@ -67,7 +75,11 @@
                             <TextBlock Style="{StaticResource InfoIcon}" VerticalAlignment="Center"
                                        ToolTip="{x:Static loc:Strings.Trainer_BleTip}" />
                         </StackPanel>
-                        <ListBox ItemsSource="{Binding FoundBleTrainers}" SelectedItem="{Binding SelectedBleTrainer}" MinHeight="56" MaxHeight="160" />
+                        <Grid>
+                            <ListBox x:Name="BleTrainerList" ItemsSource="{Binding FoundBleTrainers}" SelectedItem="{Binding SelectedBleTrainer}" MinHeight="56" MaxHeight="160" />
+                            <TextBlock Text="{x:Static loc:Strings.List_TrainersEmpty}" Style="{StaticResource Caption}" Margin="10,8" IsHitTestVisible="False"
+                                       Visibility="{Binding HasItems, ElementName=BleTrainerList, Converter={StaticResource InvBoolToVis}}" />
+                        </Grid>
                     </StackPanel>
 
                     <CheckBox Content="{x:Static loc:Strings.Trainer_AutoStart}" IsChecked="{Binding AutoStartVirtualShifting}" Margin="0,16,0,0" />
@@ -117,10 +129,14 @@
                         <StackPanel>
                             <TextBlock Text="{x:Static loc:Strings.Trainer_Manual}" Style="{StaticResource Caption}" Margin="0,0,0,6" />
                             <StackPanel Orientation="Horizontal">
-                                <TextBox Text="{Binding TrainerHost, UpdateSourceTrigger=PropertyChanged}" Width="170" ToolTip="{x:Static loc:Strings.Trainer_IpTip}" />
+                                <TextBox Text="{Binding TrainerHost, UpdateSourceTrigger=PropertyChanged}" Width="170" ToolTip="{x:Static loc:Strings.Trainer_IpTip}"
+                                         AutomationProperties.Name="{x:Static loc:Strings.Trainer_ManualHost}" />
                                 <TextBlock Text=":" VerticalAlignment="Center" Margin="8,0" Foreground="{StaticResource TextMuted}" />
-                                <TextBox Text="{Binding TrainerPortText, UpdateSourceTrigger=PropertyChanged}" Width="80" ToolTip="Port" />
+                                <TextBox Text="{Binding TrainerPortText, UpdateSourceTrigger=PropertyChanged}" Width="80" ToolTip="{x:Static loc:Strings.Trainer_ManualPort}"
+                                         AutomationProperties.Name="{x:Static loc:Strings.Trainer_ManualPort}" />
                             </StackPanel>
+                            <TextBlock Text="{Binding TrainerAddressError}" Style="{StaticResource Caption}" Foreground="{StaticResource Danger}" Margin="0,6,0,0"
+                                       Visibility="{Binding TrainerAddressError, Converter={StaticResource NullToCollapsed}}" />
                         </StackPanel>
                     </Border>
 
@@ -128,8 +144,8 @@
                     <Border Style="{StaticResource Card}">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
-                                <Button Content="{x:Static loc:Strings.Trainer_Measure}" Command="{Binding MeasureDrivetrainCommand}" IsEnabled="{Binding CanMeasure}" Margin="0,0,8,0" />
-                                <Button Content="{x:Static loc:Strings.Trainer_UseMeasure}" Command="{Binding UseMeasuredRatioCommand}" IsEnabled="{Binding CanUseMeasurement}" />
+                                <Button Content="{x:Static loc:Strings.Trainer_Measure}" Command="{Binding MeasureDrivetrainCommand}" Margin="0,0,8,0" />
+                                <Button Content="{x:Static loc:Strings.Trainer_UseMeasure}" Command="{Binding UseMeasuredRatioCommand}" />
                             </StackPanel>
                             <TextBlock Text="{Binding MeasureResult}" Style="{StaticResource Caption}" Margin="0,8,0,0" />
                         </StackPanel>
@@ -160,6 +176,8 @@
                                     <TextBox Text="{Binding BikeWeightText, UpdateSourceTrigger=PropertyChanged}" Width="80" />
                                 </StackPanel>
                             </StackPanel>
+                            <TextBlock Text="{Binding WeightsError}" Style="{StaticResource Caption}" Foreground="{StaticResource Danger}" Margin="0,4,0,0"
+                                       Visibility="{Binding WeightsError, Converter={StaticResource NullToCollapsed}}" />
                             <TextBlock Style="{StaticResource Caption}" Margin="0,4,0,16"
                                        Text="{x:Static loc:Strings.Trainer_WeightsNote}" />
 

@@ -27,16 +27,23 @@
                                        ToolTip="{x:Static loc:Strings.Trainer_TelemetryTip}" />
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                            <TextBlock Text="{x:Static loc:Strings.Trainer_Opacity}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,12,0" />
+                            <TextBlock Text="{x:Static loc:Strings.Trainer_Opacity}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,12,0" MinWidth="120" />
                             <Slider Minimum="0.2" Maximum="1" Value="{Binding OverlayOpacity}" Width="160" VerticalAlignment="Center"
                                     AutomationProperties.Name="{x:Static loc:Strings.Trainer_OpacityName}" />
+                        </StackPanel>
+                        <!-- Taille : aussi à la molette sur la superposition, mais celle-ci ne reçoit plus la souris une fois verrouillée -->
+                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <TextBlock Text="{x:Static loc:Strings.Trainer_OverlaySize}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,12,0" MinWidth="120" />
+                            <Slider Minimum="0.5" Maximum="3" Value="{Binding OverlayScale}" Width="160" VerticalAlignment="Center"
+                                    SmallChange="0.1" LargeChange="0.25" TickFrequency="0.1" IsSnapToTickEnabled="True"
+                                    AutomationProperties.Name="{x:Static loc:Strings.Trainer_OverlaySizeName}" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>
             </Border>
 
             <!-- Démarrage (Windows) : lancement avec Windows, zone de notification -->
-            <Border Style="{StaticResource Card}" Visibility="{Binding HasLocalInput, Converter={StaticResource BoolToVis}}">
+            <Border Style="{StaticResource Card}" Visibility="{Binding SupportsTray, Converter={StaticResource BoolToVis}}">
                 <StackPanel>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                         <TextBlock Style="{StaticResource SectionIcon}" Text="&#xE7E8;" />
@@ -87,6 +94,23 @@
                 </StackPanel>
             </Border>
 
+            <!-- Sauvegarde : export / import des réglages, assignations et profils -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                        <TextBlock Style="{StaticResource SectionIcon}" Text="&#xE777;" />
+                        <TextBlock Text="{x:Static loc:Strings.Backup_Title}" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,10" Text="{x:Static loc:Strings.Backup_Help}" />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="{x:Static loc:Strings.Backup_Export}" Command="{Binding ExportSettingsCommand}" Margin="0,0,8,0" />
+                        <Button Content="{x:Static loc:Strings.Backup_Import}" Command="{Binding ImportSettingsCommand}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding BackupStatus}" Style="{StaticResource Caption}" Margin="0,8,0,0"
+                               Visibility="{Binding BackupStatus, Converter={StaticResource NullToCollapsed}}" />
+                </StackPanel>
+            </Border>
+
             <!-- Outils : journal de diagnostic -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>
@@ -96,6 +120,8 @@
                     </StackPanel>
                     <Button Content="{x:Static loc:Strings.Settings_OpenDiagnostic}" Command="{Binding NavigateCommand}" CommandParameter="diagnostic"
                             HorizontalAlignment="Left" />
+                    <Button Content="{x:Static loc:Strings.Settings_OpenOnboarding}" Command="{Binding OpenOnboardingCommand}"
+                            HorizontalAlignment="Left" Margin="0,10,0,0" />
                     <TextBlock Style="{StaticResource Caption}" Margin="0,8,0,0"
                                Text="{x:Static loc:Strings.Settings_ToolsHelp}" />
                     <Button Content="{x:Static loc:Strings.Settings_PrivacyPolicy}" Command="{Binding OpenPrivacyPolicyCommand}"

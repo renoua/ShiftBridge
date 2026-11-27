@@ -8,22 +8,30 @@
       <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
         <StackPanel Spacing="4">
           <TextBlock Classes="title" Text="{x:Static loc:Strings.Nav_Controllers}" />
-          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Devices_Intro}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Devices_IntroNoKeyboard}" />
         </StackPanel>
         <Button Grid.Column="1" Classes="accent" VerticalAlignment="Center" Content="{x:Static loc:Strings.Devices_Scan}" Command="{Binding StartScanCommand}" />
       </Grid>
       <TextBlock Classes="detail" Text="{x:Static loc:Strings.Devices_Scanning}" IsVisible="{Binding IsScanning}" />
+      <!-- Aucune manette encore vue : quoi faire -->
+      <Border Classes="card" IsVisible="{Binding !Devices.Count}">
+        <StackPanel Spacing="6" HorizontalAlignment="Center">
+          <TextBlock Classes="section" Text="{x:Static loc:Strings.Devices_NoneFound}" HorizontalAlignment="Center" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Devices_NoneHint}" TextAlignment="Center" />
+        </StackPanel>
+      </Border>
       <ItemsControl ItemsSource="{Binding Devices}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:DeviceRowViewModel">
             <Border Classes="card" Margin="0,0,0,8">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
-                <StackPanel Spacing="4" ToolTip.Tip="{Binding Detail}">
+              <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                <Ellipse Classes="badge" Fill="{Binding State, Converter={StaticResource StateBrush}}" />
+                <StackPanel Grid.Column="1" Spacing="4" ToolTip.Tip="{Binding Detail}">
                   <TextBlock Classes="section" Text="{Binding Title}" />
                   <TextBlock Classes="detail" Text="{Binding StateText}" />
                   <TextBlock Classes="detail" Text="{Binding BatteryText}" IsVisible="{Binding HasBattery}" />
                 </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <Button Content="{x:Static loc:Strings.Dev_Pair}" IsVisible="{Binding CanPair}"
                           Command="{Binding #DevicesPage.DataContext.PairDeviceCommand}" CommandParameter="{Binding}" />
                   <Button Content="{Binding ActionText}" Command="{Binding #DevicesPage.DataContext.ToggleDeviceCommand}" CommandParameter="{Binding}" />
@@ -45,11 +53,12 @@
           <TextBlock Classes="section" Text="{x:Static loc:Strings.Hr_Title}" />
           <TextBlock Classes="detail" Text="{Binding HeartRateStatus}" />
           <ComboBox ItemsSource="{Binding FoundHeartRateSensors}" SelectedItem="{Binding SelectedHeartRateSensor}"
+                    PlaceholderText="{x:Static loc:Strings.List_HrEmpty}"
                     HorizontalAlignment="Stretch" AutomationProperties.Name="{x:Static loc:Strings.Hr_Title}" />
           <WrapPanel>
             <Button Margin="0,0,8,0" Content="{Binding HeartRateScanButtonText}" Command="{Binding ToggleHeartRateScanCommand}" />
             <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Hr_Connect}" Command="{Binding ConnectHeartRateCommand}" />
-            <Button Content="{x:Static loc:Strings.Hr_Disconnect}" Command="{Binding DisconnectHeartRateCommand}" />
+            <Button Content="{x:Static loc:Strings.Hr_Disconnect}" Command="{Binding DisconnectHeartRateCommand}" IsVisible="{Binding HeartRateConnected}" />
           </WrapPanel>
         </StackPanel>
       </Border>

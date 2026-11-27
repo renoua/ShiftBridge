@@ -127,6 +127,11 @@ public sealed class AppConfig
     /// <summary>Dernière vitesse virtuelle (1..24) ; 0 = jamais mémorisée (vitesse centrale au départ).</summary>
     public int LastGear { get; set; }
 
+    /// <summary>Assistant de démarrage terminé ou passé. Absent d'un ancien fichier : utilisateur déjà installé, assistant non proposé.</summary>
+    public bool OnboardingCompleted { get; set; }
+    /// <summary>Bandeau « Prochaine étape » de l'Accueil masqué par l'utilisateur.</summary>
+    public bool HideNextStep { get; set; }
+
     /// <summary>Vitesse de répétition des touches vitesse + / − tenues (valable pour toutes les touches).</summary>
     public RepeatSpeed RepeatSpeed { get; set; } = RepeatSpeeds.Default;
 
@@ -229,6 +234,8 @@ public static class ConfigStore
             {
                 var loaded = JsonSerializer.Deserialize<AppConfig>(text, Options) ?? new AppConfig();
                 loaded.Normalize();
+                // Fichier d'avant l'assistant (0.26) : l'application est déjà configurée, on ne le propose pas.
+                if (!text.Contains($"\"{nameof(AppConfig.OnboardingCompleted)}\"", StringComparison.Ordinal)) loaded.OnboardingCompleted = true;
                 return loaded;
             }
             catch (JsonException)
@@ -242,8 +249,65 @@ public static class ConfigStore
         return new AppConfig();
     }
 
+    // ---------- Export / import ----------
+
+    /// <summary>Propriétés jamais exportées : secrets (clés d'appairage SRAM) et valeurs propres à cette machine ou à cette séance.</summary>
+    private static readonly string[] NotExported = [nameof(AppConfig.SramAxsKeys), nameof(AppConfig.OverlayLeft), nameof(AppConfig.OverlayTop), nameof(AppConfig.LastGear)];
+
+    /// <summary>Marque d'un fichier d'export (ignorée à la lecture : propriété inconnue d'<see cref="AppConfig"/>).</summary>
+    public const string ExportMarker = "ShiftBridgeExport";
+
+    /// <summary>Réglages à enregistrer dans un fichier choisi par l'utilisateur, sans les clés SRAM ni la position de la superposition.</summary>
+    public static string Export(AppConfig config, string appVersion)
+    {
+        System.Text.Json.Nodes.JsonObject node;
+        lock (config.SyncRoot) node = (System.Text.Json.Nodes.JsonObject)JsonSerializer.SerializeToNode(config, Options)!;
+        foreach (var name in NotExported) node.Remove(name);
+        var result = new System.Text.Json.Nodes.JsonObject { [ExportMarker] = appVersion };
+        foreach (var (key, value) in node.ToList()) { node.Remove(key); result[key] = value; }
+        return result.ToJsonString(Options);
+    }
+
+    /// <summary>
+    /// Lit un export (ou un config.json) : lecture tolérante comme <see cref="Load"/>, valeurs ramenées dans leurs bornes. Ce que
+    /// l'export ne contient pas (clés SRAM, position de la superposition, dernière vitesse) est repris de <paramref name="current"/>.
+    /// </summary>
+    /// <exception cref="FormatException">Fichier illisible ou qui n'est pas un fichier de réglages ShiftBridge.</exception>
+    public static AppConfig Import(string json, AppConfig current)
+    {
+        System.Text.Json.Nodes.JsonObject node;
+        try { node = System.Text.Json.Nodes.JsonNode.Parse(json) as System.Text.Json.Nodes.JsonObject ?? throw new FormatException("not an object"); }
+        catch (JsonException ex) { throw new FormatException(ex.Message, ex); }
+        // Un fichier JSON quelconque n'est pas pris pour des réglages : il faut la marque d'export ou le profil d'un config.json.
+        if (!node.ContainsKey(ExportMarker) && !node.ContainsKey(nameof(AppConfig.Profile)))
+            throw new FormatException("not a ShiftBridge settings file");
+
+        AppConfig imported;
+        try { imported = node.Deserialize<AppConfig>(Options) ?? throw new FormatException("empty"); }
+        catch (JsonException ex) { throw new FormatException(ex.Message, ex); }
+        imported.Normalize();
+        imported.OnboardingCompleted = true; // réglages restaurés : pas d'assistant au redémarrage
+        lock (current.SyncRoot)
+        {
+            if (!node.ContainsKey(nameof(AppConfig.SramAxsKeys))) imported.SramAxsKeys = new(current.SramAxsKeys);
+            if (!node.ContainsKey(nameof(AppConfig.OverlayLeft))) imported.OverlayLeft = current.OverlayLeft;
+            if (!node.ContainsKey(nameof(AppConfig.OverlayTop))) imported.OverlayTop = current.OverlayTop;
+            if (!node.ContainsKey(nameof(AppConfig.LastGear))) imported.LastGear = Math.Clamp(current.LastGear, 0, imported.GearCount);
+        }
+        return imported;
+    }
+
+    private static volatile bool _frozen;
+
+    /// <summary>
+    /// Plus aucune écriture du fichier par défaut jusqu'au redémarrage : des réglages importés viennent de le remplacer, et la
+    /// configuration encore en mémoire ne doit pas les écraser (vitesse mémorisée, réglage modifié avant de relancer…).
+    /// </summary>
+    public static void FreezeDefaultFile() => _frozen = true;
+
     public static void Save(AppConfig config, string? path = null)
     {
+        if (path is null && _frozen) return;
         path ??= DefaultPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         // Sérialisation sous le verrou de la config (une liste modifiée pendant ce temps ne la fait plus échouer), écriture

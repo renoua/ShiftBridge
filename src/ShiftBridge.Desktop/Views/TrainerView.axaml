@@ -20,22 +20,27 @@
           <TextBlock Classes="section" Text="{x:Static loc:Strings.Trainer_ConnTitle}" />
           <StackPanel Orientation="Horizontal" Spacing="14">
             <RadioButton GroupName="trainer" Content="Bluetooth" IsChecked="{Binding UseBluetooth}" />
-            <RadioButton GroupName="trainer" Content="Wi-Fi / DirCon" IsChecked="{Binding UseWifi}" />
+            <RadioButton GroupName="trainer" Content="Wi-Fi" IsChecked="{Binding UseWifi}" />
           </StackPanel>
           <StackPanel Spacing="8" IsVisible="{Binding UseBluetooth}">
             <Button Content="{Binding BleScanButtonText}" Command="{Binding ToggleBleScanCommand}" />
             <ComboBox ItemsSource="{Binding FoundBleTrainers}" SelectedItem="{Binding SelectedBleTrainer}" HorizontalAlignment="Stretch"
+                      PlaceholderText="{x:Static loc:Strings.List_TrainersEmpty}"
                       AutomationProperties.Name="{x:Static loc:Strings.Nav_Trainer}" />
           </StackPanel>
           <StackPanel Spacing="8" IsVisible="{Binding UseWifi}">
             <Button Content="{x:Static loc:Strings.Trainer_BtnFind}" Command="{Binding FindTrainersCommand}" />
             <ComboBox ItemsSource="{Binding FoundTrainers}" SelectedItem="{Binding SelectedTrainer}" HorizontalAlignment="Stretch"
+                      PlaceholderText="{x:Static loc:Strings.List_TrainersEmpty}"
                       AutomationProperties.Name="{x:Static loc:Strings.Nav_Trainer}" />
             <TextBlock Classes="detail" Text="{x:Static loc:Strings.Trainer_ManualIpPort}" />
             <StackPanel Orientation="Horizontal" Spacing="8">
               <TextBox Width="220" Text="{Binding TrainerHost}" PlaceholderText="192.168.1.10" ToolTip.Tip="{x:Static loc:Strings.Trainer_IpTip}" />
-              <TextBox Width="90" Text="{Binding TrainerPortText}" PlaceholderText="36866" />
+              <TextBox Width="90" Text="{Binding TrainerPortText}" PlaceholderText="36866"
+                       AutomationProperties.Name="{x:Static loc:Strings.Trainer_ManualPort}" />
             </StackPanel>
+            <TextBlock Classes="detail" Foreground="#FF6B6F" Text="{Binding TrainerAddressError}"
+                       IsVisible="{Binding TrainerAddressError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           </StackPanel>
           <CheckBox Content="{x:Static loc:Strings.Trainer_AutoStart}" IsChecked="{Binding AutoStartVirtualShifting}" />
           <CheckBox Content="{x:Static loc:Strings.Trainer_AppShifts}" IsChecked="{Binding AppHandlesShifting}"
@@ -63,7 +68,7 @@
       </Border>
       <Expander Header="{x:Static loc:Strings.Common_AdvancedShort}" HorizontalAlignment="Stretch">
         <StackPanel Spacing="8">
-          <CheckBox Content="{x:Static loc:Strings.Trainer_Native}" IsChecked="{Binding NativeZwiftMode}" />
+          <CheckBox Content="{x:Static loc:Strings.Trainer_Native}" IsChecked="{Binding NativeZwiftMode}" ToolTip.Tip="{x:Static loc:Strings.Trainer_NativeTip}" />
           <TextBlock Classes="detail" Text="{Binding NativeStatus}" />
           <StackPanel Orientation="Horizontal" Spacing="12">
             <StackPanel Spacing="4">
@@ -75,11 +80,13 @@
               <TextBox Text="{Binding BikeWeightText}" Width="110" HorizontalAlignment="Left" />
             </StackPanel>
           </StackPanel>
-          <CheckBox Content="{x:Static loc:Strings.Trainer_ReportGear}" IsChecked="{Binding ReportGearToApp}" />
-          <CheckBox Content="{x:Static loc:Strings.Trainer_SlopeOnly}" IsChecked="{Binding SlopeOnlyMode}" />
+          <TextBlock Classes="detail" Foreground="#FF6B6F" Text="{Binding WeightsError}" IsVisible="{Binding WeightsError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Trainer_WeightsNote}" />
+          <CheckBox Content="{x:Static loc:Strings.Trainer_ReportGear}" IsChecked="{Binding ReportGearToApp}" ToolTip.Tip="{x:Static loc:Strings.Trainer_ReportGearTip}" />
+          <CheckBox Content="{x:Static loc:Strings.Trainer_SlopeOnly}" IsChecked="{Binding SlopeOnlyMode}" ToolTip.Tip="{x:Static loc:Strings.Trainer_SlopeOnlyTip}" />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button Content="{x:Static loc:Strings.Trainer_Measure}" Command="{Binding MeasureDrivetrainCommand}" IsEnabled="{Binding CanMeasure}" />
-            <Button Content="{x:Static loc:Strings.Trainer_UseMeasure}" Command="{Binding UseMeasuredRatioCommand}" IsEnabled="{Binding CanUseMeasurement}" />
+            <Button Content="{x:Static loc:Strings.Trainer_Measure}" Command="{Binding MeasureDrivetrainCommand}" />
+            <Button Content="{x:Static loc:Strings.Trainer_UseMeasure}" Command="{Binding UseMeasuredRatioCommand}" />
           </StackPanel>
           <TextBlock Classes="detail" Text="{Binding MeasureResult}" />
         </StackPanel>

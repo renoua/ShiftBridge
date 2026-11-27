@@ -51,7 +51,8 @@
                     <DockPanel>
                         <ComboBox DockPanel.Dock="Right" Width="200" ItemsSource="{Binding RepeatSpeedOptions}"
                                   SelectedItem="{Binding SelectedRepeatSpeed}" DisplayMemberPath="Name"
-                                  ToolTip="{x:Static loc:Strings.Buttons_RepeatTip}" />
+                                  ToolTip="{x:Static loc:Strings.Buttons_RepeatTip}"
+                                  AutomationProperties.Name="{x:Static loc:Strings.Buttons_RepeatSpeed}" />
                         <TextBlock Text="{x:Static loc:Strings.Buttons_RepeatSpeed}" VerticalAlignment="Center" />
                     </DockPanel>
                 </StackPanel>
@@ -108,12 +109,12 @@
                             <Ellipse Style="{StaticResource Led}" HorizontalAlignment="Left" />
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding Label}" />
-                                <TextBlock Style="{StaticResource InfoIcon}"
+                                <TextBlock Style="{StaticResource InfoIcon}" ToolTip="{Binding Tooltip}"
                                            Visibility="{Binding Tooltip, Converter={StaticResource NullToCollapsed}}" />
                             </StackPanel>
                             <ComboBox Grid.Column="3"
                                       ItemsSource="{Binding DataContext.Actions, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                      SelectedItem="{Binding Selected}">
+                                      SelectedItem="{Binding Selected}" AutomationProperties.Name="{Binding Label}">
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate>
                                         <TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" />

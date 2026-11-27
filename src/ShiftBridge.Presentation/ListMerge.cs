@@ -38,5 +38,7 @@ public static class ListMerge
             }
             else list.Insert(i, target);
         }
+        // Clés en double (deux lignes identiques) : la boucle a placé les lignes voulues en tête, le reste est en trop.
+        while (list.Count > ordered.Count) list.RemoveAt(list.Count - 1);
     }
 }

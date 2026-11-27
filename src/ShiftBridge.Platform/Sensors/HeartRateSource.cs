@@ -1,3 +1,4 @@
+using ShiftBridge.Core.Localization;
 using ShiftBridge.Core.Trainer;
 using ShiftBridge.Platform.Ble;
 using ShiftBridge.Platform.Trainer;
@@ -56,10 +57,10 @@ public sealed class HeartRateSource : IAsyncDisposable
         {
             var services = await _link.DiscoverServicesAsync();
             if (!services.Contains(HeartRateCodec.Service))
-                throw new IOException("Ce capteur n'expose pas le service de fréquence cardiaque (0x180D).");
+                throw new IOException(Strings.Hr_NoService); // affiché dans le statut du cardio
             var chars = await _link.DiscoverCharacteristicsAsync(HeartRateCodec.Service);
             if (chars.All(c => c.Uuid != HeartRateCodec.Measurement))
-                throw new IOException("Ce capteur n'expose pas la mesure de fréquence cardiaque (0x2A37).");
+                throw new IOException(Strings.Hr_NoMeasurement);
 
             if (chars.Any(c => c.Uuid == HeartRateCodec.SensorLocation))
             {

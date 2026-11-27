@@ -26,8 +26,8 @@ public sealed class InfoButton : Label
         VerticalTextAlignment = TextAlignment.Center;
         HorizontalTextAlignment = TextAlignment.Center;
         Padding = new Thickness(8);
-        MinimumWidthRequest = 40;
-        MinimumHeightRequest = 40;
+        MinimumWidthRequest = 48;  // cible tactile minimale recommandée (48 dp)
+        MinimumHeightRequest = 48;
         SemanticProperties.SetDescription(this, Strings.Common_Info);
         var tap = new TapGestureRecognizer();
         tap.Tapped += async (_, _) =>

@@ -25,4 +25,6 @@ public static class Icons
     public const string Power = "";         // power_settings_new
     public const string Language = "";
     public const string Tools = "";         // build
+    public const string Backup = "";     // settings_backup_restore
+    public const string Wizard = "";     // flag
 }

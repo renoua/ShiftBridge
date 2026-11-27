@@ -30,8 +30,13 @@
             <Border Style="{StaticResource Card}" Stroke="{StaticResource Accent}" IsVisible="{Binding HasNextStep}">
                 <VerticalStackLayout Spacing="8">
                     <Label Text="{Binding NextStepText}" />
-                    <Button Text="{x:Static loc:Strings.Home_Open}" Command="{Binding NavigateCommand}" CommandParameter="{Binding NextStepPage}"
-                            Style="{StaticResource PrimaryButton}" HorizontalOptions="Start" />
+                    <!-- Retour à la ligne sur un écran étroit (trois boutons) -->
+                    <FlexLayout Wrap="Wrap" AlignItems="Center">
+                        <Button Text="{x:Static loc:Strings.Home_Open}" Command="{Binding NavigateCommand}" CommandParameter="{Binding NextStepPage}"
+                                Style="{StaticResource PrimaryButton}" Margin="0,0,8,6" />
+                        <Button Text="{x:Static loc:Strings.Home_OpenOnboarding}" Command="{Binding OpenOnboardingCommand}" Margin="0,0,8,6" />
+                        <Button Text="{x:Static loc:Strings.Home_HideNextStep}" Command="{Binding HideNextStepCommand}" Style="{StaticResource GhostButton}" Margin="0,0,0,6" />
+                    </FlexLayout>
                 </VerticalStackLayout>
             </Border>
 
@@ -68,28 +73,28 @@
             </Border>
 
             <!-- Tuiles : un appui ouvre la page correspondante (manettes, touches, trainer, cardio, appli) -->
-            <Border Style="{StaticResource Card}">
+            <Border Style="{StaticResource Card}" SemanticProperties.Description="{x:Static loc:Strings.Home_SecControllers}" SemanticProperties.Hint="{Binding ControllersSummary}">
                 <Border.GestureRecognizers><TapGestureRecognizer Command="{Binding NavigateCommand}" CommandParameter="devices" /></Border.GestureRecognizers>
                 <ctl:StatusTile State="{Binding ControllersState}" Heading="{x:Static loc:Strings.Home_SecControllers}"
                                 Summary="{Binding ControllersSummary}" Detail="{Binding ControllersDetail}" />
             </Border>
-            <Border Style="{StaticResource Card}">
+            <Border Style="{StaticResource Card}" SemanticProperties.Description="{x:Static loc:Strings.Home_SecButtons}" SemanticProperties.Hint="{Binding ButtonsSummary}">
                 <Border.GestureRecognizers><TapGestureRecognizer Command="{Binding NavigateCommand}" CommandParameter="buttons" /></Border.GestureRecognizers>
                 <ctl:StatusTile State="{Binding ButtonsState}" Heading="{x:Static loc:Strings.Home_SecButtons}"
                                 Summary="{Binding ButtonsSummary}" Detail="{Binding ButtonsDetail}" />
             </Border>
-            <Border Style="{StaticResource Card}">
+            <Border Style="{StaticResource Card}" SemanticProperties.Description="{x:Static loc:Strings.Home_SecTrainer}" SemanticProperties.Hint="{Binding TrainerSummary}">
                 <Border.GestureRecognizers><TapGestureRecognizer Command="{Binding NavigateCommand}" CommandParameter="trainer" /></Border.GestureRecognizers>
                 <ctl:StatusTile State="{Binding TrainerState}" Heading="{x:Static loc:Strings.Home_SecTrainer}"
                                 Summary="{Binding TrainerSummary}" Detail="{Binding TrainerDetail}" />
             </Border>
             <!-- Le cardio se règle dans Appareils -->
-            <Border Style="{StaticResource Card}">
+            <Border Style="{StaticResource Card}" SemanticProperties.Description="{x:Static loc:Strings.Home_SecHeartRate}" SemanticProperties.Hint="{Binding HeartRateSummary}">
                 <Border.GestureRecognizers><TapGestureRecognizer Command="{Binding NavigateCommand}" CommandParameter="devices" /></Border.GestureRecognizers>
                 <ctl:StatusTile State="{Binding HeartRateState}" Heading="{x:Static loc:Strings.Home_SecHeartRate}"
                                 Summary="{Binding HeartRateSummary}" Detail="{Binding HeartRateDetail}" />
             </Border>
-            <Border Style="{StaticResource Card}">
+            <Border Style="{StaticResource Card}" SemanticProperties.Description="{x:Static loc:Strings.Home_SecApp}" SemanticProperties.Hint="{Binding AppSummary}">
                 <Border.GestureRecognizers><TapGestureRecognizer Command="{Binding NavigateCommand}" CommandParameter="apps" /></Border.GestureRecognizers>
                 <ctl:StatusTile State="{Binding AppState}" Heading="{x:Static loc:Strings.Home_SecApp}"
                                 Summary="{Binding AppSummary}" Detail="{Binding AppDetail}" />

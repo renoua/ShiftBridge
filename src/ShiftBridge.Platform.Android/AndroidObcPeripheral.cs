@@ -41,6 +41,7 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
     private TaskCompletionSource<bool>? _notificationSent;
     private byte[] _lastButtonState = [ObcMessages.TypeButtonState];
     private byte _batteryValue = 100;
+    private bool _batterySet;
 
     public string Name => "OBC Bluetooth";
     public bool HasClient { get { lock (_lock) return _buttonSubscribers.Count > 0; } }
@@ -181,7 +182,9 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
     public void SetBattery(int? percent)
     {
         if (percent is not (>= 0 and <= 100)) return;
+        if (_batterySet && _batteryValue == percent.Value) return; // inchangée : aucune notification Bluetooth
         _batteryValue = (byte)percent.Value;
+        _batterySet = true;
         BluetoothDevice[] targets;
         lock (_lock) targets = [.. _batterySubscribers.Values];
         if (_batteryLevel is null || targets.Length == 0) return;

@@ -339,7 +339,7 @@ public sealed class BridgeService : IAsyncDisposable
         c.BatteryChanged += pct =>
         {
             // Avec plusieurs manettes, l'appli voit la batterie la plus faible (et non celle de la dernière qui a parlé).
-            int lowest = _controllers.Values.Where(x => x.BatteryPercent.HasValue).Select(x => x.BatteryPercent!.Value).DefaultIfEmpty(pct).Min();
+            int lowest = LowestBattery() ?? pct;
             foreach (var t in TransportsSnapshot()) t.SetBattery(lowest);
             if (pct < LowBatteryPercent && _lowBatteryAlerted.TryAdd(device.Address, 0))
                 Log?.Invoke(Loc.Fmt(Strings.Log_LowBattery, DisplayName(device), pct));
@@ -496,6 +496,15 @@ public sealed class BridgeService : IAsyncDisposable
 
     // ---------- Sorties OBC ----------
 
+    /// <summary>Batterie la plus faible des manettes qui l'annoncent ; null si aucune.</summary>
+    private int? LowestBattery()
+    {
+        int? lowest = null;
+        foreach (var c in _controllers.Values)
+            if (c.BatteryPercent is { } p && (lowest is null || p < lowest)) lowest = p;
+        return lowest;
+    }
+
     public async Task AddTransportAsync(IObcTransport t)
     {
         t.Log += m => Log?.Invoke($"[{t.Name}] {m}");
@@ -505,6 +514,8 @@ public sealed class BridgeService : IAsyncDisposable
         if (t is DirConServer dc) dc.LogWire = _verboseFrames;
         lock (_transportsLock) _transports.Add(t);
         _pumps[t] = new TransportPump(t, m => Log?.Invoke(m));
+        // Les manettes n'annoncent leur batterie qu'au changement : une sortie ajoutée après coup reçoit la valeur courante.
+        if (LowestBattery() is { } battery) t.SetBattery(battery);
         try { await t.StartAsync(); }
         catch (Exception ex)
         {
@@ -601,24 +612,36 @@ public sealed class BridgeService : IAsyncDisposable
     /// si le proxy trainer est actif (sans lui, l'appli applique elle-même les vitesses), si l'option est cochée et si l'appli
     /// n'a pas exclu ce bouton.
     /// </summary>
-    private void ReportGear(bool force = false)
+    /// <returns>Vrai si un « Gear Set » est parti vers l'appli.</returns>
+    private bool ReportGear(bool force = false, bool log = true)
     {
-        if (!Config.ReportGearToApp || !ProxyShifts) return;
-        if (_mapping.SupportedActions is { Count: > 0 } supported && !supported.Contains(ObcButtonId.GearSet)) return;
+        if (!Config.ReportGearToApp || !ProxyShifts) return false;
+        if (_mapping.SupportedActions is { Count: > 0 } supported && !supported.Contains(ObcButtonId.GearSet)) return false;
 
-        int state = Math.Clamp(Gear.Gear, 1, Gear.GearCount) + 1;
-        if (!force && state == _reportedGearState) return;
-        _reportedGearState = state;
-        foreach (var m in ObcMessages.EncodeButtonState([(ObcButtonId.GearSet, (byte)state)])) _outbox.Writer.TryWrite(m);
-        Log?.Invoke($"Vitesse {Gear.Gear}/{Gear.GearCount} envoyée à l'appli (OBC Gear Set).");
+        int gear, count;
+        // Lecture du rapport, état annoncé et file d'envoi sous le même verrou que les changements de vitesse : deux appuis
+        // simultanés ne peuvent plus annoncer un rapport plus ancien après le plus récent.
+        lock (_gearLock)
+        {
+            gear = Gear.Gear; count = Gear.GearCount;
+            int state = Math.Clamp(gear, 1, count) + 1;
+            if (!force && state == _reportedGearState) return false;
+            _reportedGearState = state;
+            foreach (var m in ObcMessages.EncodeButtonState([(ObcButtonId.GearSet, (byte)state)])) _outbox.Writer.TryWrite(m);
+        }
+        if (log) Log?.Invoke($"Vitesse {gear}/{count} envoyée à l'appli (OBC Gear Set).");
+        return true;
     }
 
     /// <summary>Relâche le « Gear Set » (valeur 0) quand le proxy s'arrête, si un rapport avait été annoncé.</summary>
     private void ReleaseReportedGear()
     {
-        if (_reportedGearState < 0) return;
-        _reportedGearState = -1;
-        foreach (var m in ObcMessages.EncodeButtonState([(ObcButtonId.GearSet, (byte)0)])) _outbox.Writer.TryWrite(m);
+        lock (_gearLock)
+        {
+            if (_reportedGearState < 0) return;
+            _reportedGearState = -1;
+            foreach (var m in ObcMessages.EncodeButtonState([(ObcButtonId.GearSet, (byte)0)])) _outbox.Writer.TryWrite(m);
+        }
     }
 
     public bool ReportGearToApp
@@ -1026,7 +1049,7 @@ public sealed class BridgeService : IAsyncDisposable
             proxy = CreateProxy(link, policy, txt, label, transport);
             await proxy.StartAsync();
 
-            _vsModel.Gear = Gear.Gear;
+            lock (_gearLock) _vsModel.Gear = Gear.Gear;
             _trainerLink = link;
             _proxy = proxy;
             _proxyEndpoint = endpoint;
@@ -1060,19 +1083,39 @@ public sealed class BridgeService : IAsyncDisposable
         var proxy = _proxy; var link = _trainerLink;
         _proxy = null; _trainerLink = null; _proxyEndpoint = null;
         lock (_dispatchLock) _mapping.AlwaysAllowed = NoActions;
-        if (proxy is not null) ReleaseReportedGear();
+        // Selon l'état annoncé, et non la présence du proxy : après un redémarrage cardio raté, le proxy est déjà null mais
+        // l'appli garde le dernier « Gear Set » reçu.
+        ReleaseReportedGear();
         if (proxy is not null) await proxy.DisposeAsync();
         if (link is not null) await link.DisposeAsync();
         if (proxy is not null || link is not null) TrainerChanged?.Invoke();
     }
 
-    private void OnGearChanged()
+    /// <returns>Vrai si le rapport a aussi été annoncé à l'appli (« Gear Set »).</returns>
+    private bool OnGearChanged(bool logReport = true)
     {
-        _vsModel.Gear = Gear.Gear;
-        Config.LastGear = Gear.Gear; // sauvegardée par l'interface (voir MainViewModel) pour être restaurée au prochain lancement
+        // Lecture et écriture sous le verrou des vitesses : deux appuis simultanés (répétition, clavier, manette…) ne peuvent plus
+        // laisser au modèle le rapport du plus ancien.
+        lock (_gearLock)
+        {
+            _vsModel.Gear = Gear.Gear;
+            Config.LastGear = Gear.Gear; // sauvegardée par l'interface (voir MainViewModel) pour être restaurée au prochain lancement
+        }
         if (_proxy is { } p) _ = p.ReapplyAsync();
-        ReportGear();
+        bool reported = ReportGear(log: logReport);
         TrainerChanged?.Invoke();
+        return reported;
+    }
+
+    /// <summary>
+    /// Une ligne par changement de vitesse : « Vitesse : ShiftUp 13→14 (proxy trainer, Gear Set envoyé) ». Remplace les trois
+    /// lignes d'avant (vitesse, « appliquée par le proxy », « envoyée à l'appli »).
+    /// </summary>
+    private void LogGearChange(string label, ObcButtonId id, int before, int after, GearChange change, bool reported)
+    {
+        string where = change == GearChange.Changed && ProxyShifts ? ", proxy trainer" : "";
+        string gearSet = reported ? ", Gear Set envoyé" : "";
+        Log?.Invoke($"{label} : {id} {before}→{after} ({change}{where}{gearSet})");
     }
 
     // ---------- Flux principal ----------
@@ -1121,10 +1164,13 @@ public sealed class BridgeService : IAsyncDisposable
             PhysicalButtonChanged?.Invoke(e.Button, e.Pressed);
             Log?.Invoke($"Touche {e.Button} {(e.Pressed ? "appuyée" : "relâchée")}");
         }
+        // Seul ce qui part réellement vers l'appli est noté « → OBC » ; les vitesses retenues par le proxy trainer sont décrites
+        // par la ligne « Vitesse : … (proxy trainer) » de l'appui, et leur relâchement (qui ne fait rien) n'est pas noté.
         foreach (var (id, state) in changes)
-            Log?.Invoke(ObcButtonCatalog.IsInternal(id)
-                ? $"→ ShiftBridge {id} {(state == 1 ? "appuyé" : "relâché")}"
-                : $"→ OBC {id} {(state == 1 ? "appuyé" : "relâché")}");
+        {
+            if (ObcButtonCatalog.IsInternal(id)) Log?.Invoke($"→ ShiftBridge {id} {(state == 1 ? "appuyé" : "relâché")}");
+            else if (toSend.Contains((id, state))) Log?.Invoke($"→ OBC {id} {(state == 1 ? "appuyé" : "relâché")}");
+        }
         if (changes.Count == 0)
         {
             if (events.Any(e => e.Pressed))
@@ -1135,10 +1181,6 @@ public sealed class BridgeService : IAsyncDisposable
         // Rapport virtuel + retour haptique sur appui uniquement.
         foreach (var (id, param) in gearActions)
             ApplyGearAction(id, param, source);
-
-        // Une seule fois par appui (et pas au relâchement, qui n'applique rien).
-        if (ProxyShifts && gearActions.Any(c => c.Id is ObcButtonId.ShiftUp or ObcButtonId.ShiftDown or ObcButtonId.ShiftUpBy or ObcButtonId.ShiftDownBy))
-            Log?.Invoke("Vitesse appliquée par le proxy trainer (non envoyée à l'appli).");
         LogSlowDispatch(started, lockWait);
     }
 
@@ -1158,9 +1200,10 @@ public sealed class BridgeService : IAsyncDisposable
     /// </summary>
     public void Shift(ObcButtonId action)
     {
-        if (action is not (ObcButtonId.ShiftUp or ObcButtonId.ShiftDown)) return;
+        if (action is not (ObcButtonId.ShiftUp or ObcButtonId.ShiftDown or ObcButtonId.CenterGear)) return;
         Log?.Invoke($"Vitesse demandée hors manette : {action}");
         ApplyGearAction(action);
+        if (action == ObcButtonId.CenterGear) return; // action interne : jamais envoyée à l'appli (comme depuis une manette)
         lock (_dispatchLock)
         {
             bool appSupportsIt = _mapping.SupportedActions is not { Count: > 0 } supported || supported.Contains(action);
@@ -1176,10 +1219,10 @@ public sealed class BridgeService : IAsyncDisposable
         GearChange change;
         int before, after;
         lock (_gearLock) { before = Gear.Gear; change = Gear.Apply(id, target); after = Gear.Gear; }
-        Log?.Invoke($"Vitesse : {id} {before}→{after} ({change})");
         LastGearChange = change;
         if (change != GearChange.None) GearChanged?.Invoke();
-        if (change == GearChange.Changed) OnGearChanged();
+        bool reported = change == GearChange.Changed && OnGearChanged(logReport: false);
+        LogGearChange("Vitesse", id, before, after, change, reported);
         _ = BuzzAsync(change, source);
 
         // « Monter / Descendre de X vitesses » : sans proxy, l'appli applique elle-même ses vitesses, elle reçoit donc
@@ -1301,10 +1344,10 @@ public sealed class BridgeService : IAsyncDisposable
                 foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)1)])) _outbox.Writer.TryWrite(m);
             }
         }
-        Log?.Invoke($"Vitesse (répétition) : {action} {before}→{after} ({change})");
         LastGearChange = change;
         if (change != GearChange.None) GearChanged?.Invoke();
-        if (change == GearChange.Changed) OnGearChanged();
+        bool reported = change == GearChange.Changed && OnGearChanged(logReport: false);
+        LogGearChange("Vitesse (répétition)", action, before, after, change, reported);
         _ = BuzzAsync(change, source);
         return change == GearChange.Changed;
     }

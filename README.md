@@ -18,6 +18,8 @@ ShiftBridge traduit chaque appui en action (vitesse +/−, navigation…). **C'e
 
 ## Utilisation
 
+Au premier lancement, un **assistant de démarrage** vous guide (manettes, trainer, application) ; il peut être passé, puis relancé depuis **Réglages** → *Outils*. Tant que tout n'est pas en place, l'Accueil rappelle la prochaine étape (bouton *Masquer* pour l'écarter).
+
 1. Éteignez/rallumez la manette et déconnectez-la de Zwift, du trainer et du téléphone (une seule connexion à la fois).
 2. Page **Appareils** → *Rechercher les manettes* → *Connecter*.
 3. Page **Touches** : choisissez l'action de chaque touche (le voyant s'allume quand vous appuyez).
@@ -25,7 +27,7 @@ ShiftBridge traduit chaque appui en action (vitesse +/−, navigation…). **C'e
    - Réseau (OpenBikeControl en réseau local) — DirCon : TrainingPeaks Virtual en réseau — Bluetooth : TrainingPeaks Virtual
    - Le Bluetooth nécessite un adaptateur supportant le rôle « périphérique ». Sinon, utilisez Réseau.
    - En Bluetooth, l'appli d'entraînement ne voit **pas** « ShiftBridge » mais le **nom Bluetooth de l'appareil** (sous Windows, le nom du PC, par exemple « DESKTOP-AB12 » ; sous Android, celui du téléphone). Ce nom s'affiche sur l'Accueil et sous l'option Bluetooth. Si rien n'apparaît dans l'appli, essayez *Réseau* (le nom est alors bien « ShiftBridge »).
-5. Page **Réglages** → *Affichage* (Windows) : *Afficher la vitesse virtuelle par-dessus le jeu* affiche la vitesse virtuelle (barre des vitesses, clignotement à chaque changement, puissance, cadence et vitesse du trainer en option) au-dessus de votre appli ; glissez-la pour la déplacer, molette pour la redimensionner. Dans la page **Trainer**, *Activer automatiquement au lancement* rétablit le virtual shifting avec le dernier trainer, à la dernière vitesse.
+5. Page **Réglages** → *Affichage* (Windows) : *Afficher la vitesse virtuelle par-dessus le jeu* affiche la vitesse virtuelle (barre des vitesses, clignotement à chaque changement, puissance, cadence et vitesse du trainer en option) au-dessus de votre appli ; glissez-la pour la déplacer, molette ou curseur *Taille* pour la redimensionner. Avec *Réduire dans la zone de notification* (carte *Démarrage*), l'icône de la zone de notification propose vitesse + / − / centrale, l'activation du virtual shifting, et l'affichage ou le déverrouillage de la superposition (verrouillée, elle laisse passer les clics). Dans la page **Trainer**, *Activer automatiquement au lancement* rétablit le virtual shifting avec le dernier trainer, à la dernière vitesse.
 6. Page **Touches** : pour « vitesse + » et « vitesse − », la case *Répéter* enchaîne les changements tant que la touche est tenue (vitesse réglable dans la carte du haut de la page : Lente, Normale, Rapide par défaut, Très rapide ; `RepeatSpeed` dans `config.json`).
 7. **Clavier, télécommande, manette de jeu** (Windows) : page **Appareils** → *Clavier et manettes de jeu*, cochez ce que vous voulez utiliser. Page **Touches** → *Ajouter une touche*, appuyez sur la touche ou le bouton voulu, puis choisissez son action.
    - Clavier et télécommandes HID (présentation, touches média, boutons Bluetooth de guidon qui se présentent comme un clavier) : les touches assignées sont **avalées** (elles n'atteignent ni Zwift ni les autres applications ; case décochable). Préférez des touches inutilisées ailleurs : F13 à F24, touches média.
@@ -39,7 +41,8 @@ ShiftBridge traduit chaque appui en action (vitesse +/−, navigation…). **C'e
    - **SRAM AXS, mode avancé** (expérimental, page Appareils → *Avancé*) : ShiftBridge s'appaire au dérailleur (échange de clés SRAMBond, hors ligne), lit son pignon arrière chiffré et traduit chaque changement d'après son sens : la page Touches propose alors « Pignon plus petit » (en général le levier droit) et « Pignon plus grand » (en général le levier gauche), à la place du simple/double appui. Le levier n'est pas lu directement : si les leviers ont été inversés dans l'appli SRAM, les libellés le sont aussi, et un appui quand le dérailleur est déjà en bout de cassette ne produit rien. **L'appairage change la clé du dérailleur : l'appli SRAM devra se reconnecter.** Procédure : cochez le mode, connectez le dérailleur, maintenez le bouton AXS du dérailleur jusqu'au clignotement, puis *Appairer*. La clé est enregistrée dans config.json (secret : ne partagez pas ce fichier). Le chiffrement est validé sur les vecteurs de test publics ; le reste n'a jamais été essayé avec un vrai dérailleur.
    - **L-TWOO** : le groupe ne signale pas ses boutons, ShiftBridge l'interroge et traduit un changement de vitesse en appuis. Saisissez son code PIN à trois caractères (page Appareils → *Avancé*) avant de connecter ; un code faux est signalé dans le journal.
    - **Wahoo KICKR Bike** et **Stages SB20** restent aussi proposés comme trainers ; leurs boutons se connectent ici en parallèle.
-10. **Réglages** → *Ouvrir le journal de diagnostic* journalise les trames brutes (utile pour un rapport de bug). Les erreurs inattendues sont écrites dans `%APPDATA%\ShiftBridge\crash.log`.
+11. **Sauvegarde des réglages** : **Réglages** → *Sauvegarde des réglages* → *Exporter…* enregistre réglages, assignations et profils dans un fichier ; *Importer…* les restaure (nouveau PC, réinstallation) puis redémarre ShiftBridge. Les clés d'appairage SRAM AXS, la position de la superposition et la dernière vitesse ne sont jamais exportées.
+12. **Réglages** → *Ouvrir le journal de diagnostic* journalise les trames brutes (utile pour un rapport de bug). Les erreurs inattendues sont écrites dans `%APPDATA%\ShiftBridge\crash.log`.
 
 Une seule instance de ShiftBridge peut tourner à la fois. La recherche des manettes s'arrête d'elle-même une fois toutes les manettes connues connectées (bouton *Rechercher* pour en ajouter une).
 
@@ -74,13 +77,13 @@ Même logique que sur Windows (mêmes manettes, mêmes touches, même virtual sh
 
 Ces manettes se verrouillent environ une minute après la connexion si Zwift ne les a pas « déverrouillées » dans les dernières 24 h (le service Zwift n'est alors plus exposé). ShiftBridge détecte le verrouillage et reconnecte automatiquement ; pour un déverrouillage durable, ouvrez l'application Zwift, connectez la manette 10 à 30 s, fermez Zwift complètement, puis revenez dans ShiftBridge. L'assistant intégré est prévu pour une version suivante.
 
-## État du projet (v0.25.2)
+## État du projet (v0.26.0)
 
 > **Testé avec un matériel limité.** ShiftBridge a été essayé par son auteur sur un petit nombre de manettes, d'appareils et d'applications. D'autres modèles, trainers, firmwares ou applications peuvent se comporter différemment : considérez-le comme une **bêta**. Les retours sont bienvenus (page *Réglages* → journal de diagnostic, puis une [issue GitHub](https://github.com/renoua/ShiftBridge/issues)). Dans le tableau, « à valider sur matériel réel » signifie « pas encore confirmé sur un éventail large de matériel ».
 
 | Fonction | État |
 |---|---|
-| Analyse des trames Play / Click / Ride, mapping, vitesse virtuelle, répétition sur appui long, cycle de vie (déconnexion, arrêt, clients bloqués, configuration) | Testé (690 tests automatisés, trames construites à la main) |
+| Analyse des trames Play / Click / Ride, mapping, vitesse virtuelle, répétition sur appui long, cycle de vie (déconnexion, arrêt, clients bloqués, configuration) | Testé (707 tests automatisés, trames construites à la main) |
 | Langue de l'interface : français si le système est en français (fr-FR, fr-BE, fr-CH, fr-CA…), anglais sinon ; sélecteur Automatique / Français / English dans les options avancées (pris en compte au redémarrage). Les textes sont dans `src/ShiftBridge.Core/Localization/Strings.resx` (anglais) et `Strings.fr.resx` (français). Le journal Diagnostic reste en français | Testé (cohérence des ressources, choix de la langue, rendu des libellés) ; **rendu à l'écran non vérifié** (Windows et Android) |
 | Clavier, télécommandes HID, manettes Xbox et joysticks (Windows) : identité de touche ouverte, fusion multi-périphériques, mapping XInput/HID, chaîne jusqu'à l'OBC | Testé avec un faux fournisseur d'entrées |
 | Manette Nintendo Switch Pro Controller en Bluetooth (rapport complet 0x30, décodage vérifié sur des rapports réels) | Testé sur matériel réel : boutons, croix, sticks, L/R, ZL/ZR |
@@ -95,7 +98,8 @@ Ces manettes se verrouillent environ une minute après la connexion si Zwift ne 
 | Click v2 : codes `0x0A`/`0x0B`, sens des champs du Click v1, seuil des palettes | Hypothèses à confirmer avec le mode Diagnostic |
 | Android : l'APK se compile (Debug et Release) et le manifeste est vérifié ; l'abstraction Bluetooth est couverte par des tests avec une fausse plateforme | Testé côté logique |
 | Android : scan, connexion GATT des manettes et du trainer, OBC Bluetooth périphérique, service de premier plan, mDNS sous Android | Écrit, **jamais exécuté sur un appareil** : à valider sur matériel réel (le Bluetooth ne fonctionne pas dans l'émulateur) |
-| Zone de notification (Windows) : icône avec Ouvrir / Quitter | Implémenté (sans raccourcis de vitesse dans son menu) |
+| Zone de notification (Windows) : info-bulle avec la vitesse, menu vitesse + / − / centrale, virtual shifting, affichage et verrouillage de la superposition | Implémenté ; menu **non encore exercé à l'écran** |
+| Assistant de démarrage (0.26) et sauvegarde des réglages (export / import) | Windows : assistant vérifié à l'écran ; export / import testés (aller-retour, clés SRAM exclues, fichiers invalides) ; Android et macOS : compilent (macOS : vues communes), **rendu à vérifier** |
 | Assistant Click v2, chiffrement Play | Non implémenté |
 
 ## Compiler

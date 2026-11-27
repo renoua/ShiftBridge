@@ -28,13 +28,29 @@
                 </DockPanel>
             </Border>
 
+            <!-- Bluetooth du PC éteint : sans lui, la recherche ne trouve rien -->
+            <Border Style="{StaticResource Card}" Padding="16,10" Margin="0,0,0,14"
+                    BorderBrush="{StaticResource Danger}"
+                    Visibility="{Binding ShowBluetoothOff, Converter={StaticResource BoolToVis}}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Content="{x:Static loc:Strings.Bt_Enable}" Command="{Binding EnableBluetoothCommand}"
+                            Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" Margin="16,0,0,0" Padding="16,6" />
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE702;" Foreground="{StaticResource Danger}" Margin="0,0,12,0" />
+                    <TextBlock Text="{x:Static loc:Strings.Bt_OffBanner}" TextWrapping="Wrap" VerticalAlignment="Center" />
+                </DockPanel>
+            </Border>
+
             <!-- Prochaine étape (masquée quand tout est en place) -->
             <Border Style="{StaticResource Card}" Padding="16,10" Margin="0,0,0,14"
                     BorderBrush="{StaticResource Accent}"
                     Visibility="{Binding HasNextStep, Converter={StaticResource BoolToVis}}">
                 <DockPanel>
-                    <Button DockPanel.Dock="Right" Content="{x:Static loc:Strings.Home_Open}" Command="{Binding NavigateCommand}" CommandParameter="{Binding NextStepPage}"
-                            Style="{StaticResource PrimaryButton}" VerticalAlignment="Center" Margin="16,0,0,0" Padding="16,6" />
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                        <Button Content="{x:Static loc:Strings.Home_HideNextStep}" Command="{Binding HideNextStepCommand}" Style="{StaticResource GhostButton}" Padding="10,6" />
+                        <Button Content="{x:Static loc:Strings.Home_OpenOnboarding}" Command="{Binding OpenOnboardingCommand}" Padding="12,6" Margin="4,0,0,0" />
+                        <Button Content="{x:Static loc:Strings.Home_Open}" Command="{Binding NavigateCommand}" CommandParameter="{Binding NextStepPage}"
+                                Style="{StaticResource PrimaryButton}" Padding="16,6" Margin="8,0,0,0" />
+                    </StackPanel>
                     <TextBlock Style="{StaticResource Icon}" Text="&#xE73E;" Foreground="{StaticResource Accent}" Margin="0,0,12,0" />
                     <TextBlock Text="{Binding NextStepText}" TextWrapping="Wrap" VerticalAlignment="Center" />
                 </DockPanel>
@@ -110,24 +126,29 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource Tile}" Command="{Binding NavigateCommand}" CommandParameter="devices">
+                <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource Tile}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Home_SecControllers}" AutomationProperties.HelpText="{Binding ControllersSummary}" Command="{Binding NavigateCommand}" CommandParameter="devices">
                     <controls:StatusTile State="{Binding ControllersState}" Title="{x:Static loc:Strings.Home_SecControllers}"
                                          Summary="{Binding ControllersSummary}" Detail="{Binding ControllersDetail}" />
                 </Button>
-                <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource Tile}" Command="{Binding NavigateCommand}" CommandParameter="buttons">
+                <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource Tile}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Home_SecButtons}" AutomationProperties.HelpText="{Binding ButtonsSummary}" Command="{Binding NavigateCommand}" CommandParameter="buttons">
                     <controls:StatusTile State="{Binding ButtonsState}" Title="{x:Static loc:Strings.Home_SecButtons}"
                                          Summary="{Binding ButtonsSummary}" Detail="{Binding ButtonsDetail}" />
                 </Button>
-                <Button Grid.Row="0" Grid.Column="4" Style="{StaticResource Tile}" Command="{Binding NavigateCommand}" CommandParameter="trainer">
+                <Button Grid.Row="0" Grid.Column="4" Style="{StaticResource Tile}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Home_SecTrainer}" AutomationProperties.HelpText="{Binding TrainerSummary}" Command="{Binding NavigateCommand}" CommandParameter="trainer">
                     <controls:StatusTile State="{Binding TrainerState}" Title="{x:Static loc:Strings.Home_SecTrainer}"
                                          Summary="{Binding TrainerSummary}" Detail="{Binding TrainerDetail}" />
                 </Button>
                 <!-- Le cardio se règle dans Appareils -->
-                <Button Grid.Row="2" Grid.Column="0" Style="{StaticResource Tile}" Command="{Binding NavigateCommand}" CommandParameter="devices">
+                <Button Grid.Row="2" Grid.Column="0" Style="{StaticResource Tile}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Home_SecHeartRate}" AutomationProperties.HelpText="{Binding HeartRateSummary}" Command="{Binding NavigateCommand}" CommandParameter="devices">
                     <controls:StatusTile State="{Binding HeartRateState}" Title="{x:Static loc:Strings.Home_SecHeartRate}"
                                          Summary="{Binding HeartRateSummary}" Detail="{Binding HeartRateDetail}" />
                 </Button>
-                <Button Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Style="{StaticResource Tile}" Command="{Binding NavigateCommand}" CommandParameter="apps">
+                <Button Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="3" Style="{StaticResource Tile}"
+                        AutomationProperties.Name="{x:Static loc:Strings.Home_SecApp}" AutomationProperties.HelpText="{Binding AppSummary}" Command="{Binding NavigateCommand}" CommandParameter="apps">
                     <controls:StatusTile State="{Binding AppState}" Title="{x:Static loc:Strings.Home_SecApp}"
                                          Summary="{Binding AppSummary}" Detail="{Binding AppDetail}" />
                 </Button>

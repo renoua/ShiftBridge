@@ -1,3 +1,4 @@
+using ShiftBridge.Core;
 using ShiftBridge.Core.Localization;
 using System.Net;
 using System.Net.Sockets;
@@ -181,7 +182,8 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
                         "Le virtual shifting est inopérant ; les vitesses sont laissées à l'appli. Connectez l'appli directement au trainer.");
 
         // 3) Arbitre du Control Point.
-        _arbiter = new ControlPointArbiter((cp, _) => _upstream.WriteAsync(FtmsCodec.ControlPoint, cp));
+        // Écriture abandonnée (son échec restant observé) à l'arrêt : la boucle de l'arbitre se termine sans attendre la liaison.
+        _arbiter = new ControlPointArbiter((cp, ct) => _upstream.WriteAsync(FtmsCodec.ControlPoint, cp).WaitObservedAsync(ct));
         _arbiter.ResponseForApp += ForwardControlResponse;
         _arbiter.ForeignResponse += _ => { Log?.Invoke("Réponse du trainer à une commande inconnue : une autre appli pilote-t-elle ce trainer ?"); ForeignControlDetected?.Invoke(); };
         _arbiter.Timeout += op => Log?.Invoke($"Le trainer n'a pas répondu à la commande 0x{op:X2}");
@@ -235,7 +237,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             {
                 await Task.Delay(LatencyReportInterval, ct);
                 if (Latency.TakeSummary() is { } line) Log?.Invoke(line);
-                if (BikeData.TakeSummary(Environment.TickCount64) is { } flow) Log?.Invoke(flow);
+                if (BikeData.TakeSummary(Environment.TickCount64, verbose: LogWire) is { } flow) Log?.Invoke(flow);
             }
         }
         catch (OperationCanceledException) { }
@@ -453,7 +455,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     }
 
     /// <summary>Notification FEC2 : mesures (vitesse, cadence, puissance) lues, vitesse remplacée par la vitesse virtuelle.</summary>
-    private byte[] OnFecNotification(byte[] value)
+    private byte[] OnFecNotification(byte[] value, bool relayed)
     {
         if (!FecCodec.TrySplit(value, out var messages)) return value;
         bool changed = false;
@@ -463,7 +465,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             if (FecCodec.TryGetTrainerData(m, out var cadence, out var power))
             {
                 long tick = Environment.TickCount64;
-                BikeData.Add(tick, power);
+                BikeData.Add(tick, power, relayed);
                 lock (_state)
                 {
                     _lastPowerW = power; _lastCadenceRpm = cadence; _fecCadence = cadence;
@@ -701,10 +703,19 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     /// <summary>Mesure du capteur cardio externe : envoyée aux clients abonnés (comme une notification du trainer).</summary>
     private void OnHeartRateMeasurement(byte[] value)
     {
+        if (SubscribersOf(HeartRateCodec.Measurement) is not { } targets) return; // aucune appli abonnée : rien à encoder
         var packet = DirConPacket.NotificationPacket(HeartRateCodec.Measurement, value).Encode();
-        List<Client> targets;
-        lock (_lock) targets = _clients.Where(c => c.IsSubscribed(HeartRateCodec.Measurement)).ToList();
         foreach (var c in targets) _ = c.SendAsync(packet);
+    }
+
+    /// <summary>Clients abonnés à <paramref name="ch"/> ; null s'il n'y en a aucun (cas courant avant que l'appli se connecte).</summary>
+    private List<Client>? SubscribersOf(Guid ch)
+    {
+        List<Client>? targets = null;
+        lock (_lock)
+            foreach (var c in _clients)
+                if (c.IsSubscribed(ch)) (targets ??= []).Add(c);
+        return targets;
     }
 
     private void OnUpstreamNotification(Guid ch, byte[] value)
@@ -717,12 +728,15 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             return;
         }
 
+        // Abonnés relevés d'abord : le suivi du flux sait ce qui est réellement relayé, et rien n'est encodé sans destinataire.
+        var targets = SubscribersOf(ch);
+
         if (ch == FtmsCodec.IndoorBikeData)
         {
             if (!_firstSampleLogged) { _firstSampleLogged = true; Log?.Invoke(TrainerReport.DescribeBikeData(value)); }
             long now = Environment.TickCount64;
             bool hasPower = FtmsCodec.TryGetPowerW(value, out int watts);
-            BikeData.Add(now, hasPower ? watts : null);
+            BikeData.Add(now, hasPower ? watts : null, relayed: targets is not null);
             bool hasCadence = FtmsCodec.TryGetCadenceRpm(value, out double cadence);
             // Un trainer peut répartir ses mesures sur plusieurs notifications (bit « More Data ») : chaque champ n'est mis
             // à jour que s'il est présent, et garde sa dernière valeur sinon (voir LastPowerW, LastCadenceRpm).
@@ -759,7 +773,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         }
         else if (ch == FecCodec.Rx && Control == TrainerControl.FeC)
         {
-            value = OnFecNotification(value);
+            value = OnFecNotification(value, relayed: targets is not null);
         }
         else if (ch == FtmsCodec.FitnessMachineStatus && Enabled && !NativeActive && value.Length > 0 && value[0] == FtmsCodec.StatusSimulationChanged)
         {
@@ -768,9 +782,8 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             if (app is { } a) value = FtmsCodec.RewriteStatusSimulation(value, a);
         }
 
+        if (targets is null) return;
         var packet = DirConPacket.NotificationPacket(ch, value).Encode();
-        List<Client> targets;
-        lock (_lock) targets = _clients.Where(c => c.IsSubscribed(ch)).ToList();
         foreach (var c in targets) _ = c.SendAsync(packet);
     }
 
@@ -1002,7 +1015,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             rl.Reconnected -= OnUpstreamReconnected;
         }
         if (HeartRate is { } hr) hr.Measurement -= OnHeartRateMeasurement;
-        _arbiter?.Dispose();
+        if (_arbiter is { } arbiter) await arbiter.DisposeAsync();
         _mdns.Dispose();
         _listener?.Stop();
         lock (_lock) { foreach (var c in _clients) c.Dispose(); _clients.Clear(); }

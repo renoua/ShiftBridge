@@ -18,6 +18,8 @@ ShiftBridge translates each press into an action (gear up/down, navigation…). 
 
 ## Usage
 
+On first launch, a **setup assistant** walks you through controllers, trainer and app; you can skip it and run it again from **Settings** → *Tools*. Until everything is in place, the Home page shows the next step (press *Hide* to dismiss it).
+
 1. Power-cycle the controller and disconnect it from Zwift, the trainer and your phone (only one connection at a time).
 2. **Devices** page → *Scan for controllers* → *Connect*.
 3. **Keys** page: choose the action of each key (the indicator lights up when you press).
@@ -25,7 +27,7 @@ ShiftBridge translates each press into an action (gear up/down, navigation…). 
    - Network (OpenBikeControl over the local network) — DirCon: TrainingPeaks Virtual over the network — Bluetooth: TrainingPeaks Virtual
    - Bluetooth needs an adapter that supports the "peripheral" role. Otherwise, use Network.
    - Over Bluetooth, the training app does **not** see "ShiftBridge" but the **device's Bluetooth name** (on Windows, the PC name, e.g. "DESKTOP-AB12"; on Android, the phone's name). That name is shown on the Home page and under the Bluetooth option. If nothing shows up in the app, try *Network* (where the name really is "ShiftBridge").
-5. **Settings** page → *Display* (Windows): *Show the virtual gear over the game* displays the virtual gear (gear bar, a flash on every change, and optionally power, cadence and trainer speed) on top of your app; drag it to move it, mouse wheel to resize. On the **Trainer** page, *Start automatically on launch* restores virtual shifting with the last trainer, at the last gear.
+5. **Settings** page → *Display* (Windows): *Show the virtual gear over the game* displays the virtual gear (gear bar, a flash on every change, and optionally power, cadence and trainer speed) on top of your app; drag it to move it, mouse wheel or the *Size* slider to resize. With *Minimize to the notification area* (*Startup* card), the notification-area icon offers gear + / − / centre, turning virtual shifting on or off, and showing or unlocking the overlay (when locked, clicks pass through it). On the **Trainer** page, *Start automatically on launch* restores virtual shifting with the last trainer, at the last gear.
 6. **Keys** page: for "gear up" and "gear down", the *Repeat* box keeps shifting as long as the key is held (speed set in the card at the top of the page: Slow, Normal, Fast by default, Very fast; `RepeatSpeed` in `config.json`).
 7. **Keyboard, remotes, gamepads** (Windows): **Devices** page → *Keyboards and gamepads*, tick what you want to use. **Keys** page → *Add a key*, press the key or button you want, then choose its action.
    - Keyboards and HID remotes (presenters, media keys, Bluetooth handlebar buttons that appear as a keyboard): assigned keys are **swallowed** (they reach neither Zwift nor other apps; can be turned off). Prefer keys that are unused elsewhere: F13 to F24, media keys.
@@ -39,7 +41,8 @@ ShiftBridge translates each press into an action (gear up/down, navigation…). 
    - **SRAM AXS, advanced mode** (experimental, Devices page → *Advanced*): ShiftBridge pairs with the derailleur (SRAMBond key exchange, offline), reads its encrypted rear-cog position and turns each change into a key by direction: the Keys page then offers "Smaller cog" (usually the right lever) and "Larger cog" (usually the left lever) instead of single/double press. The lever is not read directly: if the levers were swapped in the SRAM app, so are the labels, and a press with the derailleur already at the end of the cassette produces nothing. **Pairing changes the derailleur's key: the SRAM app will have to reconnect.** Steps: tick the mode, connect the derailleur, hold its AXS button until it blinks, then *Pair*. The key is saved in config.json (a secret: do not share that file). The cryptography is validated on the public test vectors; the rest has never been tried with a real derailleur.
    - **L-TWOO**: the groupset does not report its buttons, so ShiftBridge polls it and turns a gear change into presses. Enter its three-character PIN (Devices page → *Advanced*) before connecting; a wrong code is reported in the log.
    - **Wahoo KICKR Bike** and **Stages SB20** are still offered as trainers too; their buttons connect here in parallel.
-10. **Settings** → *Open diagnostic log* records the raw frames (useful for a bug report). Unexpected errors are written to `%APPDATA%\ShiftBridge\crash.log`.
+11. **Settings backup**: **Settings** → *Back up settings* → *Export…* saves your settings, key assignments and profiles to a file; *Import…* restores them (new PC, reinstall) and restarts ShiftBridge. SRAM AXS pairing keys, the overlay position and the last gear are never exported.
+12. **Settings** → *Open diagnostic log* records the raw frames (useful for a bug report). Unexpected errors are written to `%APPDATA%\ShiftBridge\crash.log`.
 
 Only one instance of ShiftBridge can run at a time. Controller scanning stops by itself once all known controllers are connected (use *Scan* to add one).
 
@@ -74,13 +77,13 @@ Good to know:
 
 These controllers lock about a minute after connecting if Zwift has not "unlocked" them in the last 24 h (the Zwift service is then no longer exposed). ShiftBridge detects the lock and reconnects automatically; for a lasting unlock, open the Zwift app, connect the controller for 10 to 30 s, close Zwift completely, then come back to ShiftBridge. A built-in wizard is planned for a later version.
 
-## Project status (v0.25.2)
+## Project status (v0.26.0)
 
 > **Tested with limited hardware.** ShiftBridge has been tried by its author on a small number of controllers, devices and apps. Other models, trainers, firmwares or apps may behave differently: treat it as a **beta**. Feedback is welcome (**Settings** → diagnostic log, then a [GitHub issue](https://github.com/renoua/ShiftBridge/issues)). In the table, "to validate on real hardware" means "not yet confirmed on a wide range of hardware".
 
 | Feature | Status |
 |---|---|
-| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (690 automated tests, hand-built frames) |
+| Play / Click / Ride frame parsing, mapping, virtual gear, repeat on hold, lifecycle (disconnection, shutdown, stuck clients, configuration) | Tested (707 automated tests, hand-built frames) |
 | UI language: French if the system is in French (fr-FR, fr-BE, fr-CH, fr-CA…), English otherwise; Automatic / Français / English selector in the advanced options (applied on restart). Texts are in `src/ShiftBridge.Core/Localization/Strings.resx` (English) and `Strings.fr.resx` (French). The Diagnostic log stays in French | Tested (resource consistency, language choice, label rendering); **on-screen rendering not verified** (Windows and Android) |
 | Keyboard, HID remotes, Xbox controllers and joysticks (Windows): open key identity, multi-device merging, XInput/HID mapping, chain up to OBC | Tested with a fake provider |
 | Nintendo Switch Pro Controller over Bluetooth (full 0x30 report, decoding verified on real reports) | Tested on real hardware: buttons, d-pad, sticks, L/R, ZL/ZR |
@@ -95,7 +98,8 @@ These controllers lock about a minute after connecting if Zwift has not "unlocke
 | Click v2: `0x0A`/`0x0B` codes, Click v1 field meanings, paddle threshold | Assumptions to confirm with Diagnostic mode |
 | Android: the APK builds (Debug and Release) and the manifest is verified; the Bluetooth abstraction is covered by tests with a fake platform | Tested on the logic side |
 | Android: scan, GATT connection to controllers and trainer, peripheral Bluetooth OBC, foreground service, mDNS on Android | Written, **never run on a device**: to validate on real hardware (Bluetooth does not work in the emulator) |
-| Notification area (Windows): icon with Open / Quit | Implemented (no gear shortcuts in its menu) |
+| Notification area (Windows): tooltip with the gear, menu with gear + / − / centre, virtual shifting, overlay display and lock | Implemented; menu **not yet exercised on screen** |
+| Setup assistant (0.26) and settings backup (export / import) | Windows: assistant checked on screen; export / import tested (round trip, SRAM keys left out, invalid files); Android and macOS: build (macOS: shared views), **rendering to check** |
 | Click v2 wizard, Play encryption | Not implemented |
 
 ## Building

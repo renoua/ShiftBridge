@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentView x:Class="ShiftBridge.Mobile.Views.OnboardingView"
+             xmlns="http://schemas.microsoft.com/dotnet/2021/maui" xmlns:loc="clr-namespace:ShiftBridge.Core.Localization;assembly=ShiftBridge.Core"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:ShiftBridge.Presentation;assembly=ShiftBridge.Presentation"
+             xmlns:trainer="clr-namespace:ShiftBridge.Platform.Trainer;assembly=ShiftBridge.Platform"
+             xmlns:ctl="clr-namespace:ShiftBridge.Mobile"
+             x:DataType="vm:MainViewModel"
+             BackgroundColor="{StaticResource Bg}">
+    <!-- Assistant de démarrage : plein écran (sans barres), chaque étape réutilise les commandes des pages ordinaires. -->
+    <Grid RowDefinitions="Auto,*,Auto" Padding="16,12">
+        <Grid ColumnDefinitions="*,Auto">
+            <Label Text="{Binding OnboardingProgress}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+            <Button Grid.Column="1" Text="{x:Static loc:Strings.Onb_Skip}" Command="{Binding SkipOnboardingCommand}" Style="{StaticResource GhostButton}" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <Grid Padding="0,8">
+                <!-- 1. Bienvenue (et pourquoi les permissions) -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsOnbWelcome}">
+                    <Label Text="{x:Static loc:Strings.Onb_WelcomeTitle}" FontSize="26" FontAttributes="Bold" />
+                    <Label Text="{x:Static loc:Strings.Onb_WelcomeBody}" FontSize="15" />
+                    <Label Text="{x:Static loc:Strings.Onb_PermissionsBody}" Style="{StaticResource Caption}" IsVisible="{Binding ShowsPermissionNote}" />
+                </VerticalStackLayout>
+
+                <!-- 2. Manettes -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsOnbControllers}">
+                    <Label Text="{x:Static loc:Strings.Onb_ControllersTitle}" FontSize="22" FontAttributes="Bold" />
+                    <Label Text="{x:Static loc:Strings.Onb_ControllersBody}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="8">
+                            <HorizontalStackLayout Spacing="10">
+                                <ctl:StatusBadge State="{Binding ControllersState}" />
+                                <Label Text="{Binding ControllersSummary}" FontAttributes="Bold" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <VerticalStackLayout BindableLayout.ItemsSource="{Binding Devices}" Spacing="6">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:DeviceRowViewModel">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                            <ctl:StatusBadge State="{Binding State}" />
+                                            <Label Grid.Column="1" Text="{Binding Title}" VerticalOptions="Center" />
+                                            <Label Grid.Column="2" Text="{Binding StateText}" Style="{StaticResource Caption}" VerticalOptions="Center" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
+                            <Button Text="{x:Static loc:Strings.Ble_BtnSearch}" Command="{Binding StartScanCommand}" HorizontalOptions="Start" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- 3. Trainer -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsOnbTrainer}">
+                    <Label Text="{x:Static loc:Strings.Onb_TrainerTitle}" FontSize="22" FontAttributes="Bold" />
+                    <Label Text="{x:Static loc:Strings.Onb_TrainerBody}" Style="{StaticResource Caption}" />
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="10">
+                            <HorizontalStackLayout Spacing="10">
+                                <Label Text="Wi-Fi" VerticalOptions="Center" />
+                                <Switch IsToggled="{Binding UseBluetooth}" VerticalOptions="Center" SemanticProperties.Description="{x:Static loc:Strings.Trainer_UseBluetoothA11y}" />
+                                <Label Text="Bluetooth" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <VerticalStackLayout Spacing="10" IsVisible="{Binding UseWifi}">
+                                <HorizontalStackLayout Spacing="10">
+                                    <Button Text="{x:Static loc:Strings.Trainer_BtnFind}" Command="{Binding FindTrainersCommand}" />
+                                    <ActivityIndicator IsRunning="{Binding IsSearchingTrainer}" IsVisible="{Binding IsSearchingTrainer}" Color="{StaticResource Accent}"
+                                                       HeightRequest="24" WidthRequest="24" VerticalOptions="Center" />
+                                </HorizontalStackLayout>
+                                <CollectionView ItemsSource="{Binding FoundTrainers}" SelectedItem="{Binding SelectedTrainer}" SelectionMode="Single"
+                                                HeightRequest="130" EmptyView="{x:Static loc:Strings.List_TrainersEmpty}">
+                                    <CollectionView.ItemTemplate>
+                                        <DataTemplate x:DataType="trainer:DiscoveredTrainer">
+                                            <VerticalStackLayout Padding="8,6">
+                                                <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                                <Label Text="{Binding Host}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </CollectionView.ItemTemplate>
+                                </CollectionView>
+                            </VerticalStackLayout>
+                            <VerticalStackLayout Spacing="10" IsVisible="{Binding UseBluetooth}">
+                                <Button Text="{Binding BleScanButtonText}" Command="{Binding ToggleBleScanCommand}" HorizontalOptions="Start" />
+                                <CollectionView ItemsSource="{Binding FoundBleTrainers}" SelectedItem="{Binding SelectedBleTrainer}" SelectionMode="Single"
+                                                HeightRequest="150" EmptyView="{x:Static loc:Strings.List_TrainersEmpty}">
+                                    <CollectionView.ItemTemplate>
+                                        <DataTemplate x:DataType="trainer:DiscoveredBleTrainer">
+                                            <VerticalStackLayout Padding="8,6">
+                                                <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                                <Label Text="{Binding ProtocolText}" Style="{StaticResource Caption}" />
+                                            </VerticalStackLayout>
+                                        </DataTemplate>
+                                    </CollectionView.ItemTemplate>
+                                </CollectionView>
+                            </VerticalStackLayout>
+                            <Label Text="{Binding TrainerStatus}" Style="{StaticResource Caption}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- 4. Appli d'entraînement -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsOnbApp}">
+                    <Label Text="{x:Static loc:Strings.Onb_AppTitle}" FontSize="22" FontAttributes="Bold" />
+                    <Label Text="{Binding OnboardingAppText}" FontSize="15" />
+                    <Border Style="{StaticResource Card}">
+                        <VerticalStackLayout Spacing="6">
+                            <HorizontalStackLayout Spacing="10">
+                                <ctl:StatusBadge State="{Binding AppState}" />
+                                <Label Text="{Binding AppSummary}" FontAttributes="Bold" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                            <Label Text="{Binding AppDetail}" Style="{StaticResource Caption}" />
+                            <Label Text="{Binding LocalAddressText}" Style="{StaticResource Caption}"
+                                   IsVisible="{Binding LocalAddressText, Converter={StaticResource HasText}}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- 5. Récapitulatif -->
+                <VerticalStackLayout Spacing="12" IsVisible="{Binding IsOnbDone}">
+                    <Label Text="{x:Static loc:Strings.Onb_DoneTitle}" FontSize="26" FontAttributes="Bold" />
+                    <Border Style="{StaticResource Card}">
+                        <ctl:StatusTile State="{Binding ControllersState}" Heading="{x:Static loc:Strings.Home_SecControllers}"
+                                        Summary="{Binding ControllersSummary}" Detail="{Binding ControllersDetail}" />
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <ctl:StatusTile State="{Binding TrainerState}" Heading="{x:Static loc:Strings.Home_SecTrainer}"
+                                        Summary="{Binding TrainerSummary}" Detail="{Binding TrainerDetail}" />
+                    </Border>
+                    <Border Style="{StaticResource Card}">
+                        <ctl:StatusTile State="{Binding AppState}" Heading="{x:Static loc:Strings.Home_SecApp}"
+                                        Summary="{Binding AppSummary}" Detail="{Binding AppDetail}" />
+                    </Border>
+                    <Button Text="{Binding ProxyButtonText}" Command="{Binding ToggleProxyCommand}" Style="{StaticResource PrimaryButton}"
+                            IsVisible="{Binding CanStartFromOnboarding}" />
+                    <Label Text="{x:Static loc:Strings.Onb_DoneBody}" Style="{StaticResource Caption}" />
+                </VerticalStackLayout>
+            </Grid>
+        </ScrollView>
+
+        <Grid Grid.Row="2" ColumnDefinitions="Auto,*" Padding="0,8,0,0">
+            <Button Text="{x:Static loc:Strings.Onb_Back}" Command="{Binding OnboardingBackCommand}" Style="{StaticResource GhostButton}"
+                    IsVisible="{Binding CanOnboardingGoBack}" />
+            <Button Grid.Column="1" Text="{Binding OnboardingNextText}" Command="{Binding OnboardingNextCommand}" Style="{StaticResource PrimaryButton}"
+                    HorizontalOptions="End" MinimumWidthRequest="140" />
+        </Grid>
+    </Grid>
+</ContentView>

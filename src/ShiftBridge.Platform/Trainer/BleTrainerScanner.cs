@@ -9,8 +9,12 @@ public sealed record DiscoveredBleTrainer(BleDeviceId Address, string Name, shor
 {
     public string AddressText => Address.ToString();
 
+    /// <summary>Trainer mémorisé (proposé au lancement, sans annonce reçue) : ni protocoles ni signal connus.</summary>
+    public bool Remembered { get; init; }
+
     public string ProtocolText =>
-        Protocols == TrainerProtocols.None ? Strings.Proto_ToCheck
+        Remembered ? Strings.Device_Remembered
+        : Protocols == TrainerProtocols.None ? Strings.Proto_ToCheck
         : string.Join(" + ", new[]
         {
             Protocols.HasFlag(TrainerProtocols.Ftms) ? "FTMS" : null,
@@ -18,7 +22,10 @@ public sealed record DiscoveredBleTrainer(BleDeviceId Address, string Name, shor
             Protocols == TrainerProtocols.CyclingPower ? Strings.Proto_PowerOnly : null,
         }.Where(s => s is not null));
 
-    public override string ToString() => $"{Name}  ·  {ProtocolText}  ·  {Rssi} dBm";
+    /// <summary>Signal reçu, vide tant qu'aucune annonce n'a été vue (0 dBm n'est pas une mesure).</summary>
+    public string RssiText => Rssi == 0 ? "" : $"{Rssi} dBm";
+
+    public override string ToString() => Rssi == 0 ? $"{Name}  ·  {ProtocolText}" : $"{Name}  ·  {ProtocolText}  ·  {RssiText}";
 }
 
 /// <summary>

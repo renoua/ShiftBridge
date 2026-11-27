@@ -1,0 +1,124 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="using:ShiftBridge.Core.Localization"
+             xmlns:vm="using:ShiftBridge.Presentation"
+             x:Class="ShiftBridge.Desktop.Views.OnboardingView" x:DataType="vm:MainViewModel">
+  <!-- Assistant de démarrage : à la place des onglets au premier lancement ; chaque étape réutilise les commandes des pages. -->
+  <Grid RowDefinitions="Auto,*,Auto" MaxWidth="760" Margin="0,8,0,20">
+    <Grid ColumnDefinitions="*,Auto">
+      <TextBlock Classes="detail" Text="{Binding OnboardingProgress}" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Content="{x:Static loc:Strings.Onb_Skip}" Command="{Binding SkipOnboardingCommand}" />
+    </Grid>
+
+    <ScrollViewer Grid.Row="1" Margin="0,14">
+      <Panel>
+        <!-- 1. Bienvenue -->
+        <StackPanel Spacing="12" IsVisible="{Binding IsOnbWelcome}">
+          <TextBlock Classes="title" Text="{x:Static loc:Strings.Onb_WelcomeTitle}" />
+          <TextBlock FontSize="15" Text="{x:Static loc:Strings.Onb_WelcomeBody}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Onb_PermissionsBody}" IsVisible="{Binding ShowsPermissionNote}" />
+        </StackPanel>
+
+        <!-- 2. Manettes -->
+        <StackPanel Spacing="12" IsVisible="{Binding IsOnbControllers}">
+          <TextBlock Classes="title" Text="{x:Static loc:Strings.Onb_ControllersTitle}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Onb_ControllersBody}" />
+          <Border Classes="card">
+            <StackPanel Spacing="8">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Ellipse Classes="badge" Fill="{Binding ControllersState, Converter={StaticResource StateBrush}}" />
+                <TextBlock Classes="section" Text="{Binding ControllersSummary}" />
+              </StackPanel>
+              <ItemsControl ItemsSource="{Binding Devices}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:DeviceRowViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="0,3">
+                      <Ellipse Classes="badge" Fill="{Binding State, Converter={StaticResource StateBrush}}" />
+                      <TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="2" Classes="detail" Text="{Binding StateText}" VerticalAlignment="Center" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <Button Content="{x:Static loc:Strings.Ble_BtnSearch}" Command="{Binding StartScanCommand}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- 3. Trainer -->
+        <StackPanel Spacing="12" IsVisible="{Binding IsOnbTrainer}">
+          <TextBlock Classes="title" Text="{x:Static loc:Strings.Onb_TrainerTitle}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Onb_TrainerBody}" />
+          <Border Classes="card">
+            <StackPanel Spacing="10">
+              <StackPanel Orientation="Horizontal" Spacing="14">
+                <RadioButton GroupName="onbTrainer" Content="Bluetooth" IsChecked="{Binding UseBluetooth}" />
+                <RadioButton GroupName="onbTrainer" Content="Wi-Fi" IsChecked="{Binding UseWifi}" />
+              </StackPanel>
+              <StackPanel Spacing="8" IsVisible="{Binding UseBluetooth}">
+                <Button Content="{Binding BleScanButtonText}" Command="{Binding ToggleBleScanCommand}" />
+                <ComboBox ItemsSource="{Binding FoundBleTrainers}" SelectedItem="{Binding SelectedBleTrainer}" HorizontalAlignment="Stretch"
+                          PlaceholderText="{x:Static loc:Strings.List_TrainersEmpty}" AutomationProperties.Name="{x:Static loc:Strings.Nav_Trainer}" />
+              </StackPanel>
+              <StackPanel Spacing="8" IsVisible="{Binding UseWifi}">
+                <Button Content="{x:Static loc:Strings.Trainer_BtnFind}" Command="{Binding FindTrainersCommand}" />
+                <ComboBox ItemsSource="{Binding FoundTrainers}" SelectedItem="{Binding SelectedTrainer}" HorizontalAlignment="Stretch"
+                          PlaceholderText="{x:Static loc:Strings.List_TrainersEmpty}" AutomationProperties.Name="{x:Static loc:Strings.Nav_Trainer}" />
+              </StackPanel>
+              <TextBlock Classes="detail" Text="{Binding TrainerStatus}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- 4. Appli d'entraînement -->
+        <StackPanel Spacing="12" IsVisible="{Binding IsOnbApp}">
+          <TextBlock Classes="title" Text="{x:Static loc:Strings.Onb_AppTitle}" />
+          <TextBlock FontSize="15" Text="{Binding OnboardingAppText}" />
+          <Border Classes="card">
+            <StackPanel Spacing="6">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Ellipse Classes="badge" Fill="{Binding AppState, Converter={StaticResource StateBrush}}" />
+                <TextBlock Classes="section" Text="{Binding AppSummary}" />
+              </StackPanel>
+              <TextBlock Classes="detail" Text="{Binding AppDetail}" />
+              <SelectableTextBlock Foreground="#A7B6BD" Text="{Binding LocalAddressText}" TextWrapping="Wrap"
+                                   IsVisible="{Binding LocalAddressText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- 5. Récapitulatif -->
+        <StackPanel Spacing="12" IsVisible="{Binding IsOnbDone}">
+          <TextBlock Classes="title" Text="{x:Static loc:Strings.Onb_DoneTitle}" />
+          <Border Classes="card">
+            <StackPanel Spacing="10">
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Ellipse Classes="badge" Fill="{Binding ControllersState, Converter={StaticResource StateBrush}}" />
+                <TextBlock Classes="label" Text="{x:Static loc:Strings.Home_SecControllers}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ControllersSummary}" VerticalAlignment="Center" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Ellipse Classes="badge" Fill="{Binding TrainerState, Converter={StaticResource StateBrush}}" />
+                <TextBlock Classes="label" Text="{x:Static loc:Strings.Home_SecTrainer}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding TrainerSummary}" VerticalAlignment="Center" />
+              </StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Ellipse Classes="badge" Fill="{Binding AppState, Converter={StaticResource StateBrush}}" />
+                <TextBlock Classes="label" Text="{x:Static loc:Strings.Home_SecApp}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding AppSummary}" VerticalAlignment="Center" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+          <Button Classes="accent" Content="{Binding ProxyButtonText}" Command="{Binding ToggleProxyCommand}" IsVisible="{Binding CanStartFromOnboarding}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Onb_DoneBody}" />
+        </StackPanel>
+      </Panel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
+      <Button Content="{x:Static loc:Strings.Onb_Back}" Command="{Binding OnboardingBackCommand}" IsVisible="{Binding CanOnboardingGoBack}" />
+      <Button Grid.Column="1" Classes="accent" HorizontalAlignment="Right" MinWidth="140" HorizontalContentAlignment="Center"
+              Content="{Binding OnboardingNextText}" Command="{Binding OnboardingNextCommand}" IsDefault="True" />
+    </Grid>
+  </Grid>
+</UserControl>

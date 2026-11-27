@@ -244,18 +244,34 @@ public sealed class ControlPointArbiter : IDisposable
         }
     }
 
-    public void Dispose()
+    /// <summary>Arrête la boucle ; vrai au premier appel seulement.</summary>
+    private bool Cancel()
     {
         List<TaskCompletionSource<bool>> waiting;
         lock (_lock)
         {
-            if (_cts.IsCancellationRequested) return;
+            if (_cts.IsCancellationRequested) return false;
             _cts.Cancel();
             // Les commandes de l'appli encore en file ne partiront jamais : leurs émetteurs ne doivent pas attendre indéfiniment.
             waiting = [.. _appQueue.Select(a => a.Done)];
             _appQueue.Clear();
         }
         foreach (var d in waiting) d.TrySetResult(false);
-        try { _loop.Wait(500); } catch { }
+        return true;
+    }
+
+    public void Dispose()
+    {
+        if (Cancel()) { try { _loop.Wait(500); } catch { } }
+    }
+
+    /// <summary>
+    /// Comme <see cref="Dispose"/>, sans bloquer de thread : une écriture du Control Point en cours (jusqu'à 6 s en Bluetooth)
+    /// ne fige plus l'interface à l'arrêt du proxy.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        if (!Cancel()) return;
+        try { await _loop.WaitAsync(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false); } catch { }
     }
 }

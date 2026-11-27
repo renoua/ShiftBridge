@@ -40,7 +40,8 @@
                     <Label Text="{x:Static loc:Strings.Buttons_RepeatSpeed}" VerticalOptions="Center" />
                     <Picker Grid.Column="1" ItemsSource="{Binding RepeatSpeedOptions}"
                             ItemDisplayBinding="{Binding Name, x:DataType=vm:RepeatSpeedOption}"
-                            SelectedItem="{Binding SelectedRepeatSpeed}" FontSize="13" />
+                            SelectedItem="{Binding SelectedRepeatSpeed}" FontSize="13"
+                            SemanticProperties.Description="{x:Static loc:Strings.Buttons_RepeatSpeed}" />
                 </Grid>
             </Border>
 
@@ -67,7 +68,8 @@
                                                 </BoxView>
                                                 <Label Grid.Column="1" Text="{Binding Label}" VerticalOptions="Center" LineBreakMode="WordWrap" />
                                                 <Picker Grid.Column="2" ItemsSource="{Binding Actions}" ItemDisplayBinding="{Binding Display, x:DataType=vm:ActionItem}"
-                                                        SelectedItem="{Binding Selected}" FontSize="13" />
+                                                        SelectedItem="{Binding Selected}" FontSize="13"
+                                                        SemanticProperties.Description="{Binding Label}" />
                                             </Grid>
                                             <!-- Seulement pour « vitesse + » et « vitesse − » -->
                                             <HorizontalStackLayout Spacing="6" Margin="22,0,0,4" IsVisible="{Binding CanRepeat}">

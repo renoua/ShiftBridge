@@ -334,6 +334,24 @@ public class ZwiftTrainerChannelTests
     }
 
     [Fact]
+    public async Task A_duplicate_confirmation_does_not_consume_the_next_request()
+    {
+        var link = new FakeZwiftLink();
+        var logs = new List<string>();
+        await using var channel = (await Open(link, logs: logs))!;
+        link.Push(ZwiftConstants.SyncTxCharacteristic, GearReply(2.4));
+
+        await channel.SendGearAsync(3.74);
+        await channel.SendGearAsync(3.99);
+        link.Push(ZwiftConstants.SyncTxCharacteristic, GearReply(3.74));
+        link.Push(ZwiftConstants.SyncTxCharacteristic, GearReply(3.74));          // le trainer répète sa réponse
+        link.Push(ZwiftConstants.SyncTxCharacteristic, GearReply(3.99));
+
+        lock (logs) Assert.DoesNotContain(logs, l => l.Contains("retenu"));
+        lock (logs) Assert.Equal(3, logs.Count(l => l.Contains("confirme")));    // 2,40 + 3,74 + 3,99, sans le doublon
+    }
+
+    [Fact]
     public async Task A_real_mismatch_is_still_flagged()
     {
         var link = new FakeZwiftLink();

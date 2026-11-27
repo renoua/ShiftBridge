@@ -259,19 +259,24 @@ public sealed class ZwiftController : IController
         if (frame?.Pressed is not null) lock (_trackerLock) events = _tracker.Update(frame.Pressed);
 
         // Les trames de boutons arrivent à ~30 Hz même au repos : on ne journalise que les changements
-        // (ou tout, si le journal détaillé est activé). Les trames inconnues et la batterie sont toujours loguées.
+        // (ou tout, si le journal détaillé est activé). Les trames inconnues sont toujours loguées ; le message vide (0x15,
+        // ~1/s chez la Play) et la batterie inchangée (~toutes les 5 s) ne le sont qu'en journal détaillé.
         bool isButtonFrame = frame?.Pressed is not null;
         bool firstButtonFrame = isButtonFrame && _buttonFrameCount == 0;
         if (isButtonFrame) _buttonFrameCount++;
-        if (VerboseFrames || !isButtonFrame || firstButtonFrame || events is { Count: > 0 })
+        bool routine = data.Length > 0 && data[0] == ZwiftConstants.MsgEmpty
+                       || frame?.BatteryPercent is { } b && b == BatteryPercent;
+        if (VerboseFrames || firstButtonFrame || events is { Count: > 0 } || (!isButtonFrame && !routine))
             Frame?.Invoke($"{Info.Name} < {Hex()}");
 
-        // Preuve de vie : un résumé toutes les 15 s, déclenché par les trames elles-mêmes (pas de timer).
+        // Preuve de vie : un résumé toutes les 15 s, déclenché par les trames elles-mêmes (pas de timer). Rien quand aucune trame
+        // de boutons n'est arrivée (manette au repos) : la ligne « 0 trame(s) » envahissait le journal sans rien apprendre.
         long now = Environment.TickCount64;
         if (now - _lastStatTick >= 15000)
         {
-            if (_lastStatTick != 0)
-                Log?.Invoke($"{Info.Name} : {_buttonFrameCount - _countAtLastStat} trame(s) de boutons reçue(s) ces 15 s");
+            long count = _buttonFrameCount - _countAtLastStat;
+            if (_lastStatTick != 0 && (count > 0 || VerboseFrames))
+                Log?.Invoke($"{Info.Name} : {count} trame(s) de boutons reçue(s) ces 15 s");
             _lastStatTick = now;
             _countAtLastStat = _buttonFrameCount;
         }
@@ -308,7 +313,7 @@ public sealed class ZwiftController : IController
         try
         {
             await connection.WriteAsync(_service, ZwiftConstants.SyncRxCharacteristic, data, withResponse);
-            Frame?.Invoke($"{Info.Name} > {Convert.ToHexString(data)}");
+            if (VerboseFrames) Frame?.Invoke($"{Info.Name} > {Convert.ToHexString(data)}"); // une ligne par vibration sinon
         }
         finally { _writeLock.Release(); }
     }
@@ -323,6 +328,7 @@ public sealed class ZwiftController : IController
     private void SetBattery(int pct)
     {
         if (pct is < 0 or > 100) return; // 0xFF = inconnu chez certains firmwares : ignoré, comme par les sorties OBC
+        if (BatteryPercent == pct) return; // répétée toutes les ~5 s : ni rafraîchissement ni notification Bluetooth inutiles
         BatteryPercent = pct;
         BatteryChanged?.Invoke(pct);
     }

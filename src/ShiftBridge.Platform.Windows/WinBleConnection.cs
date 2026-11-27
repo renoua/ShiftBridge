@@ -1,3 +1,4 @@
+using ShiftBridge.Core;
 using ShiftBridge.Core.Localization;
 using ShiftBridge.Platform.Ble;
 using Windows.Devices.Bluetooth;
@@ -85,16 +86,23 @@ internal sealed class WinBleConnection : IBleConnection
         await _discoverGate.WaitAsync(ct);
         try
         {
-            if (_all is null)
+            // Copie locale : une fermeture concurrente remet _all à null pendant la découverte (« liaison fermée », pas de NRE).
+            GattDeviceServicesResult? services;
+            lock (_lock) services = _all;
+            if (services is null)
             {
                 var all = await With(_device.GetGattServicesAsync(BluetoothCacheMode.Uncached).AsTask(ct), _timeout, Strings.Op_DiscoverServices);
                 if (all.Status != GattCommunicationStatus.Success)
                     throw new IOException(Describe(Strings.Op_GattServicesUnavailable, all.Status, all.ProtocolError));
-                lock (_lock) _all = all;
+                lock (_lock)
+                {
+                    if (_disposed) throw new IOException(Strings.Err_LinkClosed);
+                    _all = services = all;
+                }
             }
 
             var result = new List<BleServiceInfo>();
-            foreach (var svc in _all.Services)
+            foreach (var svc in services.Services)
             {
                 if (serviceFilter is not null && !serviceFilter(svc.Uuid)) continue;
                 BleServiceInfo? info;
@@ -197,7 +205,7 @@ internal sealed class WinBleConnection : IBleConnection
     internal static async Task<T> With<T>(Task<T> operation, TimeSpan? timeout, string what)
     {
         if (timeout is null) return await operation;
-        try { return await operation.WaitAsync(timeout.Value); }
+        try { return await operation.WaitObservedAsync(timeout.Value); }
         catch (TimeoutException) { throw new IOException(Loc.Fmt(Strings.Err_Timeout, what)); }
     }
 

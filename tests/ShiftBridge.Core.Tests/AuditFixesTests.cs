@@ -96,6 +96,14 @@ public class AuditFixesTests
         Assert.Equal(0, resets);
     }
 
+    [Fact]
+    public void List_merge_drops_a_duplicate_that_disappeared()
+    {
+        var list = new System.Collections.ObjectModel.ObservableCollection<string> { "pad", "pad", "kbd" };
+        ShiftBridge.Presentation.ListMerge.Apply<string, string>(list, ["pad", "kbd"], r => r, (x, y) => x == y);
+        Assert.Equal(["pad", "kbd"], list);
+    }
+
     // ---------- Convertisseur d'énumérations ----------
 
     [Fact]

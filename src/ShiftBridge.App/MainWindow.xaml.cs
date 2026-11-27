@@ -10,12 +10,14 @@ namespace ShiftBridge.App;
 
 public partial class MainWindow : Window
 {
-    private readonly MainViewModel _vm = new(new WindowsBlePlatform(), new WpfDispatcher(), new WpfAppHost(), new WindowsLocalInputProvider());
+    private readonly WpfAppHost _host = new();
+    private readonly MainViewModel _vm;
     private bool _closing;
     private GearOverlayWindow? _overlay;
 
     public MainWindow()
     {
+        _vm = new(new WindowsBlePlatform(), new WpfDispatcher(), _host, new WindowsLocalInputProvider());
         InitializeComponent();
         DataContext = _vm;
         VersionText.Text = $"v{typeof(MainWindow).Assembly.GetName().Version?.ToString(3)}";
@@ -26,7 +28,8 @@ public partial class MainWindow : Window
                 case nameof(MainViewModel.ShowOverlay): SyncOverlay(); break;
                 case nameof(MainViewModel.MinimizeToTray): SyncTray(); break;
                 case nameof(MainViewModel.StartWithWindows): StartupRegistration.Apply(_vm.StartWithWindows); break;
-                case nameof(MainViewModel.GearText): _tray?.SetTooltip(_vm.TrayTooltip); break;
+                case nameof(MainViewModel.GearText):
+                case nameof(MainViewModel.ProxyActive): _tray?.SetTooltip(_vm.TrayTooltip); break;
             }
         };
         // Démarrage réduit (réglage ou lancement avec Windows) : réduite avant le premier affichage.
@@ -38,6 +41,10 @@ public partial class MainWindow : Window
             StartupRegistration.Apply(_vm.StartWithWindows); // garde la valeur du registre alignée (exe déplacé, case décochée ailleurs)
             if (startMinimized && _vm.MinimizeToTray) Hide();
             SyncOverlay();
+            // Radio Bluetooth suivie avant le démarrage : la première recherche sait déjà si elle est éteinte.
+            await _host.Radio.StartAsync();
+            _host.Radio.StateChanged += on => { if (on) _vm.OnBluetoothTurnedOn(); else _vm.SetBluetoothOff(true); };
+            if (!_host.Radio.IsOn) _vm.SetBluetoothOff(true);
             try { await _vm.StartAsync(); }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "ShiftBridge", MessageBoxButton.OK, MessageBoxImage.Warning); }
         };
@@ -69,7 +76,7 @@ public partial class MainWindow : Window
         if (_vm.MinimizeToTray)
         {
             if (_tray is not null) return;
-            _tray = new TrayIcon(_vm.TrayTooltip);
+            _tray = new TrayIcon(_vm);
             _tray.OpenRequested += RestoreFromTray;
             _tray.QuitRequested += () => Dispatcher.Invoke(Close);
         }
@@ -120,6 +127,7 @@ public partial class MainWindow : Window
         _closing = true;
         // Une liaison BLE Windows qui ne répond plus à sa fermeture ne doit pas empêcher de quitter : au bout de 5 s on part quand même.
         try { await _vm.StopAsync().WaitAsync(TimeSpan.FromSeconds(5)); } catch { /* délai dépassé ou erreur : on quitte quand même */ }
+        _host.Radio.Dispose();
         _tray?.Dispose(); // sinon l'icône reste affichée jusqu'au passage de la souris
         _tray = null;
         Close();

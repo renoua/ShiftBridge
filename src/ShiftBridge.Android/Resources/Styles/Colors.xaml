@@ -12,6 +12,6 @@
     <Color x:Key="Accent">#FF6A2B</Color>
     <Color x:Key="Success">#2BD46A</Color>
     <Color x:Key="Warning">#F5B041</Color>
-    <Color x:Key="Danger">#E5484D</Color>
+    <Color x:Key="Danger">#FF6B6F</Color> <!-- 6:1 sur les cartes (lisible pour « Arrêter ») -->
     <Color x:Key="Off">#4A5460</Color>
 </ResourceDictionary>

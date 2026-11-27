@@ -11,7 +11,8 @@
     <Grid RowDefinitions="Auto,*,Auto">
 
         <!-- Barre du haut : titre de la page, ⚙ Réglages (ou ← Retour sur Réglages et Diagnostic) -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" BackgroundColor="{StaticResource Sidebar}" HeightRequest="56" Padding="4,0">
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" BackgroundColor="{StaticResource Sidebar}" HeightRequest="56" Padding="4,0"
+              IsVisible="{Binding IsOnboarding, Converter={StaticResource InvBool}}">
             <Button Grid.Column="0" Text="{x:Static ctl:Icons.Back}" FontFamily="MaterialIcons" FontSize="24" Style="{StaticResource GhostButton}"
                     TextColor="{StaticResource Text}" WidthRequest="52" Padding="0"
                     Command="{Binding BackCommand}" IsVisible="{Binding ShowBackButton}"
@@ -35,8 +36,12 @@
             <views:DiagnosticView IsVisible="{Binding CurrentPage, Converter={StaticResource EqualsToBool}, ConverterParameter=diagnostic}" />
         </Grid>
 
+        <!-- Assistant de démarrage : plein écran, barres masquées -->
+        <views:OnboardingView Grid.RowSpan="3" IsVisible="{Binding CurrentPage, Converter={StaticResource EqualsToBool}, ConverterParameter=onboarding}" />
+
         <!-- Barre de navigation : cinq onglets (icône + libellé), la page courante en accent -->
-        <Border Grid.Row="2" BackgroundColor="{StaticResource Sidebar}" Stroke="{StaticResource Line}" StrokeThickness="0" Padding="0">
+        <Border Grid.Row="2" BackgroundColor="{StaticResource Sidebar}" Stroke="{StaticResource Line}" StrokeThickness="0" Padding="0"
+                IsVisible="{Binding IsOnboarding, Converter={StaticResource InvBool}}">
             <Grid ColumnDefinitions="*,*,*,*,*" MinimumHeightRequest="60">
                 <VerticalStackLayout Grid.Column="0" Spacing="2" Padding="0,8" BackgroundColor="Transparent" HorizontalOptions="Fill" SemanticProperties.Description="{x:Static loc:Strings.Nav_Home}">
                     <VerticalStackLayout.GestureRecognizers><TapGestureRecognizer Command="{Binding NavigateCommand}" CommandParameter="home" /></VerticalStackLayout.GestureRecognizers>

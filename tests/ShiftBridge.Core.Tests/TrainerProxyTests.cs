@@ -302,6 +302,26 @@ public class TrainerProxyTests
     }
 
     [Fact]
+    public async Task A_proxied_shift_is_logged_once_and_never_as_sent_to_the_app()
+    {
+        await using var trainer = new FakeTrainer();
+        await using var bridge = new BridgeService(new ShiftBridge.Core.Config.AppConfig());
+        await bridge.StartTrainerProxyAsync(new TrainerEndpoint.DirCon("127.0.0.1", trainer.Port));
+        var logs = new List<string>();
+        bridge.Log += m => { lock (logs) logs.Add(m); };
+
+        bridge.InjectEvents([new ShiftBridge.Core.Input.ButtonEvent(ShiftBridge.Core.Input.PhysicalButton.ClickPlus, true)]);
+        bridge.InjectEvents([new ShiftBridge.Core.Input.ButtonEvent(ShiftBridge.Core.Input.PhysicalButton.ClickPlus, false)]);
+
+        lock (logs)
+        {
+            Assert.Single(logs, l => l.StartsWith("Vitesse : ShiftUp") && l.Contains("proxy trainer"));
+            Assert.DoesNotContain(logs, l => l.Contains("→ OBC ShiftUp"));
+            Assert.DoesNotContain(logs, l => l.Contains("appliquée par le proxy"));
+        }
+    }
+
+    [Fact]
     public async Task When_the_app_handles_gears_shifts_go_to_the_app_and_the_trainer_is_relayed_unchanged()
     {
         await using var trainer = new FakeTrainer();

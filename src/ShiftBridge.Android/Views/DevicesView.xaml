@@ -9,7 +9,7 @@
     <ScrollView>
         <VerticalStackLayout Padding="16,16" Spacing="0">
             <Label Style="{StaticResource Caption}" Margin="0,0,0,14"
-                   Text="{x:Static loc:Strings.Devices_Intro}" />
+                   Text="{x:Static loc:Strings.Devices_IntroNoKeyboard}" />
 
             <!-- 1. Manettes Zwift -->
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" Margin="0,0,0,10">
@@ -47,7 +47,7 @@
                                 <HorizontalStackLayout Grid.Column="2" Spacing="6" VerticalOptions="Center">
                                     <Button Text="{x:Static loc:Strings.Dev_Pair}" Clicked="OnPairClicked" Padding="12,0" IsVisible="{Binding CanPair}" />
                                     <Button Text="{Binding ActionText}" Clicked="OnToggleClicked" Padding="12,0" />
-                                    <Button Text="⋮" Clicked="OnMoreClicked" Style="{StaticResource GhostButton}" Padding="8,0"
+                                    <Button Text="⋮" Clicked="OnMoreClicked" Style="{StaticResource GhostButton}" Padding="8,0" MinimumWidthRequest="48" MinimumHeightRequest="48"
                                             SemanticProperties.Description="{x:Static loc:Strings.Devices_MoreActions}" />
                                 </HorizontalStackLayout>
                             </Grid>
@@ -75,11 +75,12 @@
                         <Button Text="{x:Static loc:Strings.Hr_Disconnect}" Command="{Binding DisconnectHeartRateCommand}" IsVisible="{Binding HeartRateConnected}" />
                     </HorizontalStackLayout>
                     <CollectionView ItemsSource="{Binding FoundHeartRateSensors}" SelectedItem="{Binding SelectedHeartRateSensor}"
-                                    SelectionMode="Single" HeightRequest="110">
+                                    SelectionMode="Single" HeightRequest="110" EmptyView="{x:Static loc:Strings.List_HrEmpty}">
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="sensors:DiscoveredHeartRateSensor">
                                 <VerticalStackLayout Padding="8,6">
                                     <Label Text="{Binding Name}" FontAttributes="Bold" />
+                                    <Label Text="{Binding DetailText}" Style="{StaticResource Caption}" />
                                 </VerticalStackLayout>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
@@ -96,20 +97,20 @@
                 <Border Style="{StaticResource Card}">
                     <VerticalStackLayout Spacing="10">
                         <HorizontalStackLayout Spacing="10">
-                            <Switch IsToggled="{Binding AutoReconnect}" VerticalOptions="Center" />
+                            <Switch IsToggled="{Binding AutoReconnect}" VerticalOptions="Center" SemanticProperties.Description="{x:Static loc:Strings.Devices_AutoReconnect}" />
                             <Label Text="{x:Static loc:Strings.Devices_AutoReconnect}" VerticalOptions="Center" />
                         </HorizontalStackLayout>
                         <HorizontalStackLayout Spacing="10">
-                            <Switch IsToggled="{Binding ControllerVibration}" VerticalOptions="Center" />
+                            <Switch IsToggled="{Binding ControllerVibration}" VerticalOptions="Center" SemanticProperties.Description="{x:Static loc:Strings.Devices_Vibration}" />
                             <Label Text="{x:Static loc:Strings.Devices_Vibration}" VerticalOptions="Center" />
                         </HorizontalStackLayout>
                         <HorizontalStackLayout Spacing="10">
-                            <Switch IsToggled="{Binding SramAxsAdvanced}" VerticalOptions="Center" />
+                            <Switch IsToggled="{Binding SramAxsAdvanced}" VerticalOptions="Center" SemanticProperties.Description="{x:Static loc:Strings.Axs_AdvancedLabel}" />
                             <Label Text="{x:Static loc:Strings.Axs_AdvancedLabel}" VerticalOptions="Center" />
                         </HorizontalStackLayout>
                         <Label Text="{x:Static loc:Strings.Axs_AdvancedHint}" Style="{StaticResource Caption}" />
                         <Label Text="{x:Static loc:Strings.Ltwoo_PinLabel}" />
-                        <Entry Text="{Binding LtwooPin}" MaxLength="3" WidthRequest="90" HorizontalOptions="Start" />
+                        <Entry Text="{Binding LtwooPin}" MaxLength="3" WidthRequest="90" HorizontalOptions="Start" SemanticProperties.Description="{x:Static loc:Strings.Ltwoo_PinLabel}" />
                         <Label Text="{x:Static loc:Strings.Ltwoo_PinHint}" Style="{StaticResource Caption}" />
                     </VerticalStackLayout>
                 </Border>

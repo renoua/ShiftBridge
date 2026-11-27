@@ -125,7 +125,6 @@
   <data name="Fmt_Label" xml:space="preserve"><value>{0}: {1}</value></data>
   <data name="Drive_RealRatio" xml:space="preserve"><value>Real ratio {0:0.00} ({1}).</value></data>
   <data name="Trainer_Last" xml:space="preserve"><value>Last trainer</value></data>
-  <data name="App_NoneConnected" xml:space="preserve"><value>No application connected</value></data>
   <data name="Ctrl_None" xml:space="preserve"><value>No controller</value></data>
   <data name="Trainer_NotConfigured" xml:space="preserve"><value>Not configured</value></data>
   <data name="App_Waiting" xml:space="preserve"><value>Waiting</value></data>
@@ -149,10 +148,10 @@
   <data name="App_ViaTrainer" xml:space="preserve"><value>via ShiftBridge Trainer</value></data>
   <data name="App_ChooseShiftBridge" xml:space="preserve"><value>Choose ShiftBridge in your app</value></data>
   <data name="App_ChooseBleName" xml:space="preserve"><value>In your app, choose “{0}” (this device&apos;s Bluetooth name)</value></data>
-  <data name="Step_1" xml:space="preserve"><value>Step 1 of 3: turn on your Zwift controllers and connect them.</value></data>
+  <data name="Step_1" xml:space="preserve"><value>Step 1 of 3: turn on your controllers and connect them.</value></data>
   <data name="Step_2Trainer" xml:space="preserve"><value>Step 2 of 3: choose your trainer to apply virtual gears.</value></data>
-  <data name="Step_2Enable" xml:space="preserve"><value>Step 2 of 3: enable virtual shifting (button above).</value></data>
-  <data name="Step_3" xml:space="preserve"><value>Step 3 of 3: in your training app, choose “ShiftBridge Trainer” and “ShiftBridge”.</value></data>
+  <data name="Step_2Enable" xml:space="preserve"><value>Step 2 of 3: enable virtual shifting.</value></data>
+  <data name="Step_3" xml:space="preserve"><value>Step 3 of 3: in your training app, choose “ShiftBridge Trainer” as the trainer and “{0}” as the controller.</value></data>
   <data name="Log_AutoStarting" xml:space="preserve"><value>Automatically starting virtual shifting…</value></data>
   <data name="Log_AutoStartOff" xml:space="preserve"><value>Automatic start failed: is the trainer turned on? Use “Enable virtual shifting” when it is ready.</value></data>
   <data name="Log_AutoStartFailed" xml:space="preserve"><value>Automatic start failed: {0}</value></data>
@@ -190,13 +189,13 @@
   <data name="Capture_Timeout" xml:space="preserve"><value>No key detected.</value></data>
   <data name="Capture_AlreadyAssigned" xml:space="preserve"><value>{0} is already assigned.</value></data>
   <data name="Capture_Added" xml:space="preserve"><value>{0} added: choose its action.</value></data>
-  <data name="Ble_Unavailable" xml:space="preserve"><value>Unavailable: this Bluetooth adapter cannot act as a peripheral. Use “Network”.</value></data>
+  <data name="Ble_Unavailable" xml:space="preserve"><value>Unavailable: this Bluetooth adapter cannot act as a peripheral. Use “Wi-Fi / local network” instead.</value></data>
   <data name="Status_ConnectedTo" xml:space="preserve"><value>Connected to {0}</value></data>
   <data name="Status_Off" xml:space="preserve"><value>Off</value></data>
   <data name="Status_WaitingApp" xml:space="preserve"><value>Waiting for an application…</value></data>
   <data name="Status_WaitingPort" xml:space="preserve"><value>Waiting (port {0})…</value></data>
   <data name="Net_ObcNetwork" xml:space="preserve"><value>OBC network</value></data>
-  <data name="Trainer_Stopped" xml:space="preserve"><value>Proxy stopped</value></data>
+  <data name="Trainer_Stopped" xml:space="preserve"><value>Virtual shifting stopped</value></data>
   <data name="Native_Off" xml:space="preserve"><value>Native mode disabled: FTMS scaling.</value></data>
   <data name="Native_Pending" xml:space="preserve"><value>Native mode will be attempted when virtual shifting is enabled.</value></data>
   <data name="Native_Active" xml:space="preserve"><value>Native mode active: the trainer applies the gear itself.</value></data>
@@ -250,7 +249,7 @@
   <data name="Hr_Connected" xml:space="preserve"><value>{0} — connected</value></data>
   <data name="Hr_ConnectedBpm" xml:space="preserve"><value>{0} — {1} bpm</value></data>
   <data name="Hr_Reconnecting" xml:space="preserve"><value>{0} — reconnecting…</value></data>
-  <data name="Overlay_ProxyStopped" xml:space="preserve"><value>proxy stopped</value></data>
+  <data name="Overlay_ProxyStopped" xml:space="preserve"><value>virtual shifting stopped</value></data>
   <data name="Overlay_Native" xml:space="preserve"><value>native</value></data>
   <data name="Gear_Ratio" xml:space="preserve"><value>Ratio {0:0.00}</value></data>
   <data name="Mode_Stopped" xml:space="preserve"><value>Virtual shifting stopped: gear not applied</value></data>
@@ -473,7 +472,7 @@
   <data name="Home_SecButtons" xml:space="preserve"><value>BUTTONS</value></data>
   <data name="Home_SecTrainer" xml:space="preserve"><value>TRAINER</value></data>
   <data name="Home_SecApp" xml:space="preserve"><value>APPLICATION</value></data>
-  <data name="Devices_Intro" xml:space="preserve"><value>Everything that connects to ShiftBridge: Zwift controllers, heart rate sensor, keyboard.</value></data>
+  <data name="Devices_Intro" xml:space="preserve"><value>Everything that connects to ShiftBridge: Zwift and other Bluetooth controllers, heart rate sensor, keyboard and gamepads.</value></data>
   <data name="Devices_Scan" xml:space="preserve"><value>Scan for controllers</value></data>
   <data name="Devices_Scanning" xml:space="preserve"><value>Scanning…</value></data>
   <data name="Devices_NoneFound" xml:space="preserve"><value>No controller detected</value></data>
@@ -526,7 +525,6 @@
   <data name="Trainer_Cog" xml:space="preserve"><value>Cog</value></data>
   <data name="Trainer_Measure" xml:space="preserve"><value>Measure my gearing</value></data>
   <data name="Trainer_UseMeasure" xml:space="preserve"><value>Use the measurement</value></data>
-  <data name="Trainer_OverlayTitle" xml:space="preserve"><value>Virtual gear display overlaid on your game</value></data>
   <data name="Trainer_ShowOverlay" xml:space="preserve"><value>Show the virtual gear over the game</value></data>
   <data name="Trainer_OverlayHelp" xml:space="preserve"><value>Drag to move it, mouse wheel to resize.</value></data>
   <data name="Trainer_Lock" xml:space="preserve"><value>Lock (clicks pass through)</value></data>
@@ -574,10 +572,9 @@
   <data name="Notif_Quit" xml:space="preserve"><value>Quit</value></data>
   <data name="Notif_ShiftUp" xml:space="preserve"><value>Gear +</value></data>
   <data name="Notif_ShiftDown" xml:space="preserve"><value>Gear −</value></data>
-  <data name="Tray_Tooltip" xml:space="preserve"><value>ShiftBridge — gear {0}/{1}</value></data>
+  <data name="Tray_Tooltip" xml:space="preserve"><value>ShiftBridge — gear {0}/{1} · ratio {2:0.00}</value></data>
   <data name="Tray_Open" xml:space="preserve"><value>Open ShiftBridge</value></data>
   <data name="Tray_Quit" xml:space="preserve"><value>Quit</value></data>
-  <data name="App_SecTitle" xml:space="preserve"><value>Application</value></data>
   <data name="App_StartWithWindows" xml:space="preserve"><value>Start ShiftBridge with Windows</value></data>
   <data name="App_StartMinimized" xml:space="preserve"><value>Start minimized</value></data>
   <data name="App_MinimizeToTray" xml:space="preserve"><value>Minimize to the notification area</value></data>
@@ -617,9 +614,8 @@
   <data name="Settings_ToolsHelp" xml:space="preserve"><value>The log records raw frames: useful for a bug report.</value></data>
   <data name="Settings_PrivacyPolicy" xml:space="preserve"><value>Privacy policy</value></data>
   <data name="Settings_PrivacyHelp" xml:space="preserve"><value>ShiftBridge collects nothing and sends nothing to its developer: everything stays on your device.</value></data>
-  <data name="Settings_BackToSettings" xml:space="preserve"><value>← Settings</value></data>
+  <data name="Settings_BackToSettings" xml:space="preserve"><value>Settings</value></data>
   <data name="Home_SecHeartRate" xml:space="preserve"><value>HEART RATE</value></data>
-  <data name="Home_LiveTitle" xml:space="preserve"><value>LIVE</value></data>
   <data name="Hr_Summary_None" xml:space="preserve"><value>No sensor</value></data>
   <data name="Hr_Summary_Searching" xml:space="preserve"><value>Searching…</value></data>
   <data name="Hr_Summary_Connected" xml:space="preserve"><value>Sensor connected</value></data>
@@ -662,4 +658,54 @@
   <data name="Mac_BleCharacteristicMissing" xml:space="preserve"><value>Bluetooth characteristic {0} is unavailable.</value></data>
   <data name="Mac_LocalNetworkSettings" xml:space="preserve"><value>Local Network settings</value></data>
   <data name="Mac_ReleaseDownloads" xml:space="preserve"><value>Release downloads</value></data>
+  <data name="Trainer_UseBluetoothA11y" xml:space="preserve"><value>Connect to the trainer over Bluetooth (off: Wi-Fi)</value></data>
+  <data name="Trainer_ManualHost" xml:space="preserve"><value>Trainer IP address</value></data>
+  <data name="Trainer_ManualPort" xml:space="preserve"><value>Trainer port</value></data>
+  <data name="Hr_NoService" xml:space="preserve"><value>This sensor does not expose the heart-rate service (0x180D).</value></data>
+  <data name="Hr_NoMeasurement" xml:space="preserve"><value>This sensor does not expose the heart-rate measurement (0x2A37).</value></data>
+  <data name="Device_Remembered" xml:space="preserve"><value>Last used</value></data>
+  <data name="List_TrainersEmpty" xml:space="preserve"><value>No trainer listed yet: start a search.</value></data>
+  <data name="List_HrEmpty" xml:space="preserve"><value>No sensor listed yet: start a search.</value></data>
+  <data name="Update_Checking" xml:space="preserve"><value>Checking for updates…</value></data>
+  <data name="Trainer_WeightsRange" xml:space="preserve"><value>Rider weight: 30 to 200 kg; bike: 3 to 30 kg. The previous values are kept.</value></data>
+  <data name="Trainer_HostInvalid" xml:space="preserve"><value>Invalid IP address or host name.</value></data>
+  <data name="Trainer_PortInvalid" xml:space="preserve"><value>Invalid port (1 to 65535).</value></data>
+  <data name="Confirm_Forget" xml:space="preserve"><value>Forget</value></data>
+  <data name="Confirm_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Devices_IntroNoKeyboard" xml:space="preserve"><value>Everything that connects to ShiftBridge: Zwift and other Bluetooth controllers, heart rate sensor.</value></data>
+  <data name="Keys_TapToEdit" xml:space="preserve"><value>Tap to edit</value></data>
+  <data name="Diag_Copied" xml:space="preserve"><value>Log copied to the clipboard.</value></data>
+  <data name="Backup_Title" xml:space="preserve"><value>Back up settings</value></data>
+  <data name="Backup_Help" xml:space="preserve"><value>Save your settings, button assignments and profiles to a file, or restore them (new PC, reinstall). SRAM AXS pairing keys are never exported.</value></data>
+  <data name="Backup_Export" xml:space="preserve"><value>Export…</value></data>
+  <data name="Backup_Import" xml:space="preserve"><value>Import…</value></data>
+  <data name="Backup_ImportConfirmButton" xml:space="preserve"><value>Replace</value></data>
+  <data name="Backup_ConfirmImport" xml:space="preserve"><value>Replace the current settings, button assignments and profiles with those from this file? ShiftBridge will restart.</value></data>
+  <data name="Backup_Exported" xml:space="preserve"><value>Settings exported.</value></data>
+  <data name="Backup_Invalid" xml:space="preserve"><value>This file does not contain ShiftBridge settings.</value></data>
+  <data name="Backup_RestartNeeded" xml:space="preserve"><value>Settings imported. Quit ShiftBridge and open it again to apply them.</value></data>
+  <data name="Backup_Failed" xml:space="preserve"><value>Could not complete the operation: {0}</value></data>
+  <data name="Tray_ShowOverlay" xml:space="preserve"><value>Show the gear overlay</value></data>
+  <data name="Tray_LockOverlay" xml:space="preserve"><value>Lock the overlay (clicks pass through)</value></data>
+  <data name="Trainer_OverlaySize" xml:space="preserve"><value>Size</value></data>
+  <data name="Trainer_OverlaySizeName" xml:space="preserve"><value>Overlay size</value></data>
+  <data name="Home_HideNextStep" xml:space="preserve"><value>Hide</value></data>
+  <data name="Home_OpenOnboarding" xml:space="preserve"><value>Setup assistant</value></data>
+  <data name="Onb_Progress" xml:space="preserve"><value>Step {0} of {1}</value></data>
+  <data name="Onb_Skip" xml:space="preserve"><value>Skip setup</value></data>
+  <data name="Onb_Next" xml:space="preserve"><value>Next</value></data>
+  <data name="Onb_Back" xml:space="preserve"><value>Back</value></data>
+  <data name="Onb_Finish" xml:space="preserve"><value>Finish</value></data>
+  <data name="Onb_WelcomeTitle" xml:space="preserve"><value>Welcome to ShiftBridge</value></data>
+  <data name="Onb_WelcomeBody" xml:space="preserve"><value>ShiftBridge connects your controllers (Zwift Play and Click, Bluetooth remotes, groupsets…) to your training app and adds virtual gears to your smart trainer. This short assistant walks you through three steps: controllers, trainer, app.</value></data>
+  <data name="Onb_PermissionsBody" xml:space="preserve"><value>ShiftBridge uses Bluetooth to talk to your controllers, your trainer and your app. On the next screen, allow “Nearby devices” and notifications: the notification keeps ShiftBridge running during your ride.</value></data>
+  <data name="Onb_ControllersTitle" xml:space="preserve"><value>Your controllers</value></data>
+  <data name="Onb_ControllersBody" xml:space="preserve"><value>Turn on your controllers (press a button to wake them up): ShiftBridge finds them and connects on its own. You can skip this step and do it later from the Devices page.</value></data>
+  <data name="Onb_TrainerTitle" xml:space="preserve"><value>Your smart trainer</value></data>
+  <data name="Onb_TrainerBody" xml:space="preserve"><value>Choose your trainer, over Wi-Fi (DirCon) or Bluetooth: ShiftBridge sits between it and your app to apply the virtual gears. No trainer at hand? Skip this step.</value></data>
+  <data name="Onb_AppTitle" xml:space="preserve"><value>Your training app</value></data>
+  <data name="Onb_AppBody" xml:space="preserve"><value>In your app (TrainingPeaks Virtual, Les jeux du cycle…), choose “ShiftBridge Trainer” as the trainer and “{0}” as the controller. The indicator below turns green as soon as it connects.</value></data>
+  <data name="Onb_DoneTitle" xml:space="preserve"><value>Summary</value></data>
+  <data name="Onb_DoneBody" xml:space="preserve"><value>You can change all of this at any time from the Devices, Trainer and App pages. The assistant can be run again from Settings.</value></data>
+  <data name="Settings_OpenOnboarding" xml:space="preserve"><value>Run the setup assistant again</value></data>
 </root>

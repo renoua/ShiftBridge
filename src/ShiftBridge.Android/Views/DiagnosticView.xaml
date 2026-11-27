@@ -12,8 +12,10 @@
                 <Button Text="{x:Static loc:Strings.Diag_Copy}" Command="{Binding CopyLogCommand}" />
                 <Button Text="{x:Static loc:Strings.Diag_Clear}" Command="{Binding ClearLogCommand}" Style="{StaticResource GhostButton}" />
             </HorizontalStackLayout>
+            <Label Text="{Binding LogStatus}" Style="{StaticResource Caption}" TextColor="{StaticResource Success}"
+                   IsVisible="{Binding LogStatus, Converter={StaticResource HasText}}" />
             <HorizontalStackLayout Spacing="10">
-                <Switch IsToggled="{Binding VerboseFrames}" VerticalOptions="Center" />
+                <Switch IsToggled="{Binding VerboseFrames}" VerticalOptions="Center" SemanticProperties.Description="{x:Static loc:Strings.Diag_Verbose}" />
                 <Label Text="{x:Static loc:Strings.Diag_Verbose}" VerticalOptions="Center" />
             </HorizontalStackLayout>
             <!-- Inspecteur Bluetooth : pour capturer les trames d'une télécommande encore inconnue -->

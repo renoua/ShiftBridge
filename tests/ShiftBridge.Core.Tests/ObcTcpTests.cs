@@ -29,6 +29,33 @@ public class ObcStreamParserTests
         var msgs = new ObcStreamParser().Feed([0xAA, 0xBB, .. haptic]).ToList();
         Assert.Equal([haptic], msgs);
     }
+
+    [Fact]
+    public void A_corrupt_app_info_header_no_longer_blocks_the_stream_forever()
+    {
+        var haptic = ObcMessages.EncodeHaptic(new ObcHaptic(ObcHapticPattern.Short, 0, 0));
+        var parser = new ObcStreamParser();
+        // En-tête App Info annonçant un identifiant de 255 octets qui n'arrivera jamais.
+        Assert.Empty(parser.Feed([ObcMessages.TypeAppInfo, 0x01, 0xFF], nowMs: 0));
+        Assert.Empty(parser.Feed(haptic, nowMs: 100));                                   // avalé par l'en-tête corrompu
+
+        var msgs = new List<byte[]>();
+        long t = 100 + ObcStreamParser.StaleAfterMs + 1;
+        for (int i = 0; i < 8 && msgs.Count == 0; i++, t += ObcStreamParser.StaleAfterMs + 1)
+            msgs.AddRange(parser.Feed([], t));                                           // l'en-tête finit par être abandonné
+        msgs.AddRange(parser.Feed(haptic, t));
+        Assert.Contains(msgs, m => m.SequenceEqual(haptic));
+    }
+
+    [Fact]
+    public void A_slow_but_valid_message_is_not_dropped()
+    {
+        var info = ObcMessages.EncodeAppInfo(new ObcAppInfo("tpv", "1.0", [0x01]));
+        var parser = new ObcStreamParser();
+        Assert.Empty(parser.Feed(info.AsSpan(0, 4), nowMs: 0));
+        var msgs = parser.Feed(info.AsSpan(4), nowMs: ObcStreamParser.StaleAfterMs / 2).ToList();
+        Assert.Equal([info], msgs);
+    }
 }
 
 public class ObcTcpServerTests

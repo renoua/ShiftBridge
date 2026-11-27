@@ -34,7 +34,7 @@
                             <Label Text="{x:Static loc:Strings.Apps_WifiLan}" FontAttributes="Bold" />
                             <Label Text="{Binding NetworkStatus}" Style="{StaticResource Caption}" />
                         </VerticalStackLayout>
-                        <Switch Grid.Column="1" IsToggled="{Binding EnableNetwork}" VerticalOptions="Center" SemanticProperties.Description="Wi-Fi / réseau local" />
+                        <Switch Grid.Column="1" IsToggled="{Binding EnableNetwork}" VerticalOptions="Center" SemanticProperties.Description="{x:Static loc:Strings.Apps_WifiLan}" />
                     </Grid>
 
                     <Label Text="{Binding LocalAddressText}" Style="{StaticResource Caption}"

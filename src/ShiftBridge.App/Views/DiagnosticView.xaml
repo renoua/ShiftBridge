@@ -3,8 +3,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <DockPanel Margin="36,30,36,30">
         <StackPanel DockPanel.Dock="Top">
-            <Button Content="{x:Static loc:Strings.Settings_BackToSettings}" Command="{Binding NavigateCommand}" CommandParameter="settings"
-                    Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="-16,-8,0,6" />
+            <!-- Flèche en glyphe (et non dans le texte traduit, que le lecteur d'écran lisait « flèche gauche Réglages ») -->
+            <Button Command="{Binding NavigateCommand}" CommandParameter="settings" AutomationProperties.Name="{x:Static loc:Strings.Settings_BackToSettings}"
+                    Style="{StaticResource GhostButton}" HorizontalAlignment="Left" Margin="-16,-8,0,6">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE72B;" FontSize="12" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    <TextBlock Text="{x:Static loc:Strings.Settings_BackToSettings}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                </StackPanel>
+            </Button>
             <TextBlock Text="{x:Static loc:Strings.Nav_Diagnostic}" Style="{StaticResource PageTitle}" />
             <TextBlock Style="{StaticResource Caption}" Margin="0,0,0,16"
                        Text="{x:Static loc:Strings.Diag_Intro}" />
@@ -12,6 +18,7 @@
                 <Button Content="{x:Static loc:Strings.Diag_Copy}" Command="{Binding CopyLogCommand}" Margin="0,0,8,0" />
                 <Button Content="{x:Static loc:Strings.Diag_Clear}" Command="{Binding ClearLogCommand}" Style="{StaticResource GhostButton}" Margin="0,0,20,0" />
                 <CheckBox Content="{x:Static loc:Strings.Diag_Verbose}" IsChecked="{Binding VerboseFrames}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding LogStatus}" Style="{StaticResource Caption}" Foreground="{StaticResource Success}" VerticalAlignment="Center" Margin="16,0,0,0" />
             </StackPanel>
             <!-- Inspecteur Bluetooth : pour capturer les trames d'une télécommande encore inconnue -->
             <TextBlock Text="{x:Static loc:Strings.Inspect_Title}" Style="{StaticResource SectionTitle}" Margin="0,4,0,2" />
@@ -51,7 +58,7 @@
                 </TextBox>
             </DockPanel>
         </StackPanel>
-        <TextBox Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="12"
+        <TextBox x:Name="LogBox" Text="{Binding LogText, Mode=OneWay}" IsReadOnly="True" FontFamily="Consolas" FontSize="12"
                  Background="{StaticResource Sidebar}" Foreground="{StaticResource TextMuted}" Padding="12"
                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" />
     </DockPanel>

@@ -54,11 +54,20 @@ internal sealed class MacAppHost(Window owner, MacBlePlatform bluetooth) : IAppH
         catch { /* Opening System Settings or the browser is best effort. */ }
     }
 
+    // Export / import des réglages : boîtes du système (code commun dans ShiftBridge.Desktop). Pas de relance automatique :
+    // l'utilisateur quitte et rouvre l'application (message affiché par la page Réglages).
+    public Task<bool> SaveTextFileAsync(string suggestedName, string content) =>
+        ShiftBridge.Desktop.DesktopFiles.SaveTextAsync(owner, suggestedName, content);
+
+    public Task<string?> OpenTextFileAsync() => ShiftBridge.Desktop.DesktopFiles.OpenTextAsync(owner);
+
     public async Task<bool> ConfirmAsync(string message) => await ShowDialogAsync(message, null) is not null;
+
+    public async Task<bool> ConfirmAsync(string message, string confirmLabel) => await ShowDialogAsync(message, null, confirmLabel) is not null;
 
     public Task<string?> PromptTextAsync(string message, string initial) => ShowDialogAsync(message, initial);
 
-    private Task<string?> ShowDialogAsync(string message, string? initial)
+    private Task<string?> ShowDialogAsync(string message, string? initial, string? acceptLabel = null)
     {
         var dialog = new Window
         {
@@ -79,7 +88,7 @@ internal sealed class MacAppHost(Window owner, MacBlePlatform bluetooth) : IAppH
         }
 
         var cancel = new Button { Content = Strings.Buttons_Cancel, IsCancel = true };
-        var accept = new Button { Content = Strings.State_Ok, IsDefault = true };
+        var accept = new Button { Content = acceptLabel ?? Strings.State_Ok, IsDefault = true };
         cancel.Click += (_, _) => dialog.Close(null);
         accept.Click += (_, _) => dialog.Close(input?.Text ?? "");
         content.Children.Add(new StackPanel

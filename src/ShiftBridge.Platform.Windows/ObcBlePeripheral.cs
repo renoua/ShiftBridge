@@ -19,6 +19,7 @@ public sealed class ObcBlePeripheral : IObcTransport
     private GattLocalCharacteristic? _batteryLevel;
     private byte[] _lastButtonState = [ObcMessages.TypeButtonState];
     private byte _batteryValue = 100;
+    private bool _batterySet;
     private readonly ObcAppInfoReassembler _appInfo = new();
 
     public string Name => "OBC Bluetooth";
@@ -128,7 +129,9 @@ public sealed class ObcBlePeripheral : IObcTransport
     public void SetBattery(int? percent)
     {
         if (percent is not (>= 0 and <= 100)) return;
+        if (_batterySet && _batteryValue == percent.Value) return; // inchangée : aucune notification Bluetooth
         _batteryValue = (byte)percent.Value;
+        _batterySet = true;
         if (_batteryLevel is { SubscribedClients.Count: > 0 })
             _ = _batteryLevel.NotifyValueAsync(CryptographicBuffer.CreateFromByteArray([_batteryValue]));
     }

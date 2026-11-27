@@ -125,7 +125,6 @@
   <data name="Fmt_Label" xml:space="preserve"><value>{0} : {1}</value></data>
   <data name="Drive_RealRatio" xml:space="preserve"><value>Rapport réel {0:0.00} ({1}).</value></data>
   <data name="Trainer_Last" xml:space="preserve"><value>Dernier trainer</value></data>
-  <data name="App_NoneConnected" xml:space="preserve"><value>Aucune application connectée</value></data>
   <data name="Ctrl_None" xml:space="preserve"><value>Aucune manette</value></data>
   <data name="Trainer_NotConfigured" xml:space="preserve"><value>Non configuré</value></data>
   <data name="App_Waiting" xml:space="preserve"><value>En attente</value></data>
@@ -149,10 +148,10 @@
   <data name="App_ViaTrainer" xml:space="preserve"><value>via ShiftBridge Trainer</value></data>
   <data name="App_ChooseShiftBridge" xml:space="preserve"><value>Choisissez ShiftBridge dans votre appli</value></data>
   <data name="App_ChooseBleName" xml:space="preserve"><value>Dans votre appli, choisissez « {0} » (nom Bluetooth de cet appareil)</value></data>
-  <data name="Step_1" xml:space="preserve"><value>Étape 1 sur 3 : allumez vos manettes Zwift et connectez-les.</value></data>
+  <data name="Step_1" xml:space="preserve"><value>Étape 1 sur 3 : allumez vos manettes et connectez-les.</value></data>
   <data name="Step_2Trainer" xml:space="preserve"><value>Étape 2 sur 3 : choisissez votre trainer pour appliquer les vitesses virtuelles.</value></data>
-  <data name="Step_2Enable" xml:space="preserve"><value>Étape 2 sur 3 : activez le virtual shifting (bouton ci-dessus).</value></data>
-  <data name="Step_3" xml:space="preserve"><value>Étape 3 sur 3 : dans votre application d'entraînement, choisissez « ShiftBridge Trainer » et « ShiftBridge ».</value></data>
+  <data name="Step_2Enable" xml:space="preserve"><value>Étape 2 sur 3 : activez le virtual shifting.</value></data>
+  <data name="Step_3" xml:space="preserve"><value>Étape 3 sur 3 : dans votre application d'entraînement, choisissez « ShiftBridge Trainer » comme trainer et « {0} » comme manette.</value></data>
   <data name="Log_AutoStarting" xml:space="preserve"><value>Démarrage automatique du virtual shifting…</value></data>
   <data name="Log_AutoStartOff" xml:space="preserve"><value>Démarrage automatique impossible : le trainer est-il allumé ? Utilisez « Activer le virtual shifting » quand il est prêt.</value></data>
   <data name="Log_AutoStartFailed" xml:space="preserve"><value>Démarrage automatique impossible : {0}</value></data>
@@ -190,13 +189,13 @@
   <data name="Capture_Timeout" xml:space="preserve"><value>Aucune touche détectée.</value></data>
   <data name="Capture_AlreadyAssigned" xml:space="preserve"><value>{0} est déjà assignée.</value></data>
   <data name="Capture_Added" xml:space="preserve"><value>{0} ajoutée : choisissez son action.</value></data>
-  <data name="Ble_Unavailable" xml:space="preserve"><value>Non disponible : cet adaptateur Bluetooth ne peut pas être périphérique. Utilisez « Réseau ».</value></data>
+  <data name="Ble_Unavailable" xml:space="preserve"><value>Non disponible : cet adaptateur Bluetooth ne peut pas être périphérique. Utilisez plutôt « Wi-Fi / réseau local ».</value></data>
   <data name="Status_ConnectedTo" xml:space="preserve"><value>Connecté à {0}</value></data>
   <data name="Status_Off" xml:space="preserve"><value>Désactivé</value></data>
   <data name="Status_WaitingApp" xml:space="preserve"><value>En attente d'une application…</value></data>
   <data name="Status_WaitingPort" xml:space="preserve"><value>En attente (port {0})…</value></data>
   <data name="Net_ObcNetwork" xml:space="preserve"><value>OBC réseau</value></data>
-  <data name="Trainer_Stopped" xml:space="preserve"><value>Proxy arrêté</value></data>
+  <data name="Trainer_Stopped" xml:space="preserve"><value>Virtual shifting arrêté</value></data>
   <data name="Native_Off" xml:space="preserve"><value>Mode natif désactivé : mise à l'échelle FTMS.</value></data>
   <data name="Native_Pending" xml:space="preserve"><value>Le mode natif sera tenté à l'activation du virtual shifting.</value></data>
   <data name="Native_Active" xml:space="preserve"><value>Mode natif actif : le trainer applique lui-même la vitesse.</value></data>
@@ -250,7 +249,7 @@
   <data name="Hr_Connected" xml:space="preserve"><value>{0} — connecté</value></data>
   <data name="Hr_ConnectedBpm" xml:space="preserve"><value>{0} — {1} bpm</value></data>
   <data name="Hr_Reconnecting" xml:space="preserve"><value>{0} — reconnexion…</value></data>
-  <data name="Overlay_ProxyStopped" xml:space="preserve"><value>proxy arrêté</value></data>
+  <data name="Overlay_ProxyStopped" xml:space="preserve"><value>virtual shifting arrêté</value></data>
   <data name="Overlay_Native" xml:space="preserve"><value>natif</value></data>
   <data name="Gear_Ratio" xml:space="preserve"><value>Rapport {0:0.00}</value></data>
   <data name="Mode_Stopped" xml:space="preserve"><value>Virtual shifting arrêté : vitesse non appliquée</value></data>
@@ -473,7 +472,7 @@
   <data name="Home_SecButtons" xml:space="preserve"><value>TOUCHES</value></data>
   <data name="Home_SecTrainer" xml:space="preserve"><value>TRAINER</value></data>
   <data name="Home_SecApp" xml:space="preserve"><value>APPLICATION</value></data>
-  <data name="Devices_Intro" xml:space="preserve"><value>Tout ce qui se connecte à ShiftBridge : manettes Zwift, capteur cardio, clavier.</value></data>
+  <data name="Devices_Intro" xml:space="preserve"><value>Tout ce qui se connecte à ShiftBridge : manettes Zwift et autres télécommandes Bluetooth, capteur cardio, clavier et manettes de jeu.</value></data>
   <data name="Devices_Scan" xml:space="preserve"><value>Rechercher les manettes</value></data>
   <data name="Devices_Scanning" xml:space="preserve"><value>Recherche en cours…</value></data>
   <data name="Devices_NoneFound" xml:space="preserve"><value>Aucune manette détectée</value></data>
@@ -526,7 +525,6 @@
   <data name="Trainer_Cog" xml:space="preserve"><value>Pignon</value></data>
   <data name="Trainer_Measure" xml:space="preserve"><value>Mesurer mon braquet</value></data>
   <data name="Trainer_UseMeasure" xml:space="preserve"><value>Utiliser la mesure</value></data>
-  <data name="Trainer_OverlayTitle" xml:space="preserve"><value>Affichage des vitesses virtuelles en superposition à votre jeu</value></data>
   <data name="Trainer_ShowOverlay" xml:space="preserve"><value>Afficher la vitesse virtuelle par-dessus le jeu</value></data>
   <data name="Trainer_OverlayHelp" xml:space="preserve"><value>Glissez-le pour le déplacer, molette pour changer la taille.</value></data>
   <data name="Trainer_Lock" xml:space="preserve"><value>Verrouiller (les clics le traversent)</value></data>
@@ -574,10 +572,9 @@
   <data name="Notif_Quit" xml:space="preserve"><value>Quitter</value></data>
   <data name="Notif_ShiftUp" xml:space="preserve"><value>Vitesse +</value></data>
   <data name="Notif_ShiftDown" xml:space="preserve"><value>Vitesse −</value></data>
-  <data name="Tray_Tooltip" xml:space="preserve"><value>ShiftBridge — vitesse {0}/{1}</value></data>
+  <data name="Tray_Tooltip" xml:space="preserve"><value>ShiftBridge — vitesse {0}/{1} · rapport {2:0.00}</value></data>
   <data name="Tray_Open" xml:space="preserve"><value>Ouvrir ShiftBridge</value></data>
   <data name="Tray_Quit" xml:space="preserve"><value>Quitter</value></data>
-  <data name="App_SecTitle" xml:space="preserve"><value>Application</value></data>
   <data name="App_StartWithWindows" xml:space="preserve"><value>Lancer ShiftBridge avec Windows</value></data>
   <data name="App_StartMinimized" xml:space="preserve"><value>Démarrer réduit</value></data>
   <data name="App_MinimizeToTray" xml:space="preserve"><value>Réduire dans la zone de notification</value></data>
@@ -617,9 +614,8 @@
   <data name="Settings_ToolsHelp" xml:space="preserve"><value>Le journal enregistre les trames brutes : utile pour un rapport de bug.</value></data>
   <data name="Settings_PrivacyPolicy" xml:space="preserve"><value>Politique de confidentialité</value></data>
   <data name="Settings_PrivacyHelp" xml:space="preserve"><value>ShiftBridge ne collecte rien et n'envoie rien à son développeur : tout reste sur votre appareil.</value></data>
-  <data name="Settings_BackToSettings" xml:space="preserve"><value>← Réglages</value></data>
+  <data name="Settings_BackToSettings" xml:space="preserve"><value>Réglages</value></data>
   <data name="Home_SecHeartRate" xml:space="preserve"><value>CARDIO</value></data>
-  <data name="Home_LiveTitle" xml:space="preserve"><value>EN DIRECT</value></data>
   <data name="Hr_Summary_None" xml:space="preserve"><value>Aucun capteur</value></data>
   <data name="Hr_Summary_Searching" xml:space="preserve"><value>Recherche…</value></data>
   <data name="Hr_Summary_Connected" xml:space="preserve"><value>Capteur connecté</value></data>
@@ -662,4 +658,54 @@
   <data name="Mac_BleCharacteristicMissing" xml:space="preserve"><value>La caractéristique Bluetooth {0} est indisponible.</value></data>
   <data name="Mac_LocalNetworkSettings" xml:space="preserve"><value>Réglages du réseau local</value></data>
   <data name="Mac_ReleaseDownloads" xml:space="preserve"><value>Téléchargements des versions</value></data>
+  <data name="Trainer_UseBluetoothA11y" xml:space="preserve"><value>Connexion au trainer en Bluetooth (désactivé : Wi-Fi)</value></data>
+  <data name="Trainer_ManualHost" xml:space="preserve"><value>Adresse IP du trainer</value></data>
+  <data name="Trainer_ManualPort" xml:space="preserve"><value>Port du trainer</value></data>
+  <data name="Hr_NoService" xml:space="preserve"><value>Ce capteur n'expose pas le service de fréquence cardiaque (0x180D).</value></data>
+  <data name="Hr_NoMeasurement" xml:space="preserve"><value>Ce capteur n'expose pas la mesure de fréquence cardiaque (0x2A37).</value></data>
+  <data name="Device_Remembered" xml:space="preserve"><value>Dernier utilisé</value></data>
+  <data name="List_TrainersEmpty" xml:space="preserve"><value>Aucun trainer dans la liste : lancez une recherche.</value></data>
+  <data name="List_HrEmpty" xml:space="preserve"><value>Aucun capteur dans la liste : lancez une recherche.</value></data>
+  <data name="Update_Checking" xml:space="preserve"><value>Recherche de mises à jour…</value></data>
+  <data name="Trainer_WeightsRange" xml:space="preserve"><value>Poids du cycliste : 30 à 200 kg ; vélo : 3 à 30 kg. Les valeurs précédentes sont conservées.</value></data>
+  <data name="Trainer_HostInvalid" xml:space="preserve"><value>Adresse IP ou nom d'hôte invalide.</value></data>
+  <data name="Trainer_PortInvalid" xml:space="preserve"><value>Port invalide (1 à 65535).</value></data>
+  <data name="Confirm_Forget" xml:space="preserve"><value>Oublier</value></data>
+  <data name="Confirm_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="Devices_IntroNoKeyboard" xml:space="preserve"><value>Tout ce qui se connecte à ShiftBridge : manettes Zwift et autres télécommandes Bluetooth, capteur cardio.</value></data>
+  <data name="Keys_TapToEdit" xml:space="preserve"><value>Touchez pour modifier</value></data>
+  <data name="Diag_Copied" xml:space="preserve"><value>Journal copié dans le presse-papiers.</value></data>
+  <data name="Backup_Title" xml:space="preserve"><value>Sauvegarde des réglages</value></data>
+  <data name="Backup_Help" xml:space="preserve"><value>Enregistrez vos réglages, assignations de touches et profils dans un fichier, ou restaurez-les (nouveau PC, réinstallation). Les clés d'appairage SRAM AXS ne sont jamais exportées.</value></data>
+  <data name="Backup_Export" xml:space="preserve"><value>Exporter…</value></data>
+  <data name="Backup_Import" xml:space="preserve"><value>Importer…</value></data>
+  <data name="Backup_ImportConfirmButton" xml:space="preserve"><value>Remplacer</value></data>
+  <data name="Backup_ConfirmImport" xml:space="preserve"><value>Remplacer les réglages, assignations de touches et profils actuels par ceux de ce fichier ? ShiftBridge va redémarrer.</value></data>
+  <data name="Backup_Exported" xml:space="preserve"><value>Réglages exportés.</value></data>
+  <data name="Backup_Invalid" xml:space="preserve"><value>Ce fichier ne contient pas de réglages ShiftBridge.</value></data>
+  <data name="Backup_RestartNeeded" xml:space="preserve"><value>Réglages importés. Quittez ShiftBridge puis rouvrez-le pour les appliquer.</value></data>
+  <data name="Backup_Failed" xml:space="preserve"><value>Opération impossible : {0}</value></data>
+  <data name="Tray_ShowOverlay" xml:space="preserve"><value>Afficher la superposition</value></data>
+  <data name="Tray_LockOverlay" xml:space="preserve"><value>Verrouiller la superposition (les clics la traversent)</value></data>
+  <data name="Trainer_OverlaySize" xml:space="preserve"><value>Taille</value></data>
+  <data name="Trainer_OverlaySizeName" xml:space="preserve"><value>Taille de la superposition</value></data>
+  <data name="Home_HideNextStep" xml:space="preserve"><value>Masquer</value></data>
+  <data name="Home_OpenOnboarding" xml:space="preserve"><value>Assistant</value></data>
+  <data name="Onb_Progress" xml:space="preserve"><value>Étape {0} sur {1}</value></data>
+  <data name="Onb_Skip" xml:space="preserve"><value>Passer l'assistant</value></data>
+  <data name="Onb_Next" xml:space="preserve"><value>Suivant</value></data>
+  <data name="Onb_Back" xml:space="preserve"><value>Précédent</value></data>
+  <data name="Onb_Finish" xml:space="preserve"><value>Terminer</value></data>
+  <data name="Onb_WelcomeTitle" xml:space="preserve"><value>Bienvenue dans ShiftBridge</value></data>
+  <data name="Onb_WelcomeBody" xml:space="preserve"><value>ShiftBridge relie vos manettes (Zwift Play et Click, télécommandes Bluetooth, groupes…) à votre application d'entraînement et ajoute des vitesses virtuelles à votre home trainer. Ce court assistant vous guide en trois étapes : manettes, trainer, application.</value></data>
+  <data name="Onb_PermissionsBody" xml:space="preserve"><value>ShiftBridge utilise le Bluetooth pour parler à vos manettes, à votre trainer et à votre application. À l'écran suivant, autorisez « Appareils à proximité » et les notifications : la notification garde ShiftBridge actif pendant la séance.</value></data>
+  <data name="Onb_ControllersTitle" xml:space="preserve"><value>Vos manettes</value></data>
+  <data name="Onb_ControllersBody" xml:space="preserve"><value>Allumez vos manettes (appuyez sur un bouton pour les réveiller) : ShiftBridge les trouve et s'y connecte tout seul. Vous pouvez passer cette étape et le faire plus tard depuis la page Appareils.</value></data>
+  <data name="Onb_TrainerTitle" xml:space="preserve"><value>Votre home trainer</value></data>
+  <data name="Onb_TrainerBody" xml:space="preserve"><value>Choisissez votre trainer, en Wi-Fi (DirCon) ou en Bluetooth : ShiftBridge se place entre lui et votre application pour appliquer les vitesses virtuelles. Pas de trainer sous la main ? Passez cette étape.</value></data>
+  <data name="Onb_AppTitle" xml:space="preserve"><value>Votre application d'entraînement</value></data>
+  <data name="Onb_AppBody" xml:space="preserve"><value>Dans votre application (TrainingPeaks Virtual, Les jeux du cycle…), choisissez « ShiftBridge Trainer » comme trainer et « {0} » comme manette. L'indicateur ci-dessous passe au vert dès qu'elle se connecte.</value></data>
+  <data name="Onb_DoneTitle" xml:space="preserve"><value>Récapitulatif</value></data>
+  <data name="Onb_DoneBody" xml:space="preserve"><value>Tout cela se modifie à tout moment depuis les pages Appareils, Trainer et Appli. L'assistant peut être relancé depuis les Réglages.</value></data>
+  <data name="Settings_OpenOnboarding" xml:space="preserve"><value>Relancer l'assistant de démarrage</value></data>
 </root>

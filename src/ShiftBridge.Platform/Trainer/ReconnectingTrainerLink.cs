@@ -1,3 +1,4 @@
+using ShiftBridge.Core;
 using ShiftBridge.Core.Localization;
 
 namespace ShiftBridge.Platform.Trainer;
@@ -166,7 +167,7 @@ public sealed class ReconnectingTrainerLink : IReconnectingLink
     {
         try
         {
-            await inner.ReadAsync(characteristic).WaitAsync(TimeSpan.FromMilliseconds(Math.Max(500, _silenceTimeout.TotalMilliseconds / 4)), _cts.Token);
+            await inner.ReadAsync(characteristic).WaitObservedAsync(TimeSpan.FromMilliseconds(Math.Max(500, _silenceTimeout.TotalMilliseconds / 4)), _cts.Token);
             return true;
         }
         catch { return false; }

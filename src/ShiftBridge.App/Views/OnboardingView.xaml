@@ -1,0 +1,141 @@
+<UserControl x:Class="ShiftBridge.App.Views.OnboardingView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:loc="clr-namespace:ShiftBridge.Core.Localization;assembly=ShiftBridge.Core"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:ShiftBridge.App.Controls"
+             Background="{StaticResource Bg}">
+    <!-- Assistant de démarrage : plein écran au premier lancement. Chaque étape réutilise les commandes des pages ordinaires. -->
+    <DockPanel Margin="48,28,48,28" MaxWidth="760">
+        <!-- En-tête : progression et « Passer » -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,18">
+            <Button DockPanel.Dock="Right" Content="{x:Static loc:Strings.Onb_Skip}" Command="{Binding SkipOnboardingCommand}" Style="{StaticResource GhostButton}" />
+            <TextBlock Text="{Binding OnboardingProgress}" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+        </DockPanel>
+
+        <!-- Pied : précédent / suivant -->
+        <DockPanel DockPanel.Dock="Bottom" Margin="0,18,0,0">
+            <Button DockPanel.Dock="Right" Content="{Binding OnboardingNextText}" Command="{Binding OnboardingNextCommand}"
+                    Style="{StaticResource PrimaryButton}" Padding="28,10" IsDefault="True" />
+            <Button Content="{x:Static loc:Strings.Onb_Back}" Command="{Binding OnboardingBackCommand}" HorizontalAlignment="Left"
+                    Visibility="{Binding CanOnboardingGoBack, Converter={StaticResource BoolToVis}}" />
+        </DockPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <Grid>
+                <!-- 1. Bienvenue -->
+                <StackPanel Visibility="{Binding IsOnbWelcome, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{x:Static loc:Strings.Onb_WelcomeTitle}" Style="{StaticResource PageTitle}" FontSize="32" Margin="0,0,0,12" />
+                    <TextBlock Text="{x:Static loc:Strings.Onb_WelcomeBody}" TextWrapping="Wrap" FontSize="15" LineHeight="22" />
+                    <TextBlock Text="{x:Static loc:Strings.Onb_PermissionsBody}" Style="{StaticResource Caption}" Margin="0,14,0,0"
+                               Visibility="{Binding ShowsPermissionNote, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+
+                <!-- 2. Manettes : recherche en direct -->
+                <StackPanel Visibility="{Binding IsOnbControllers, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{x:Static loc:Strings.Onb_ControllersTitle}" Style="{StaticResource PageTitle}" Margin="0,0,0,8" />
+                    <TextBlock Text="{x:Static loc:Strings.Onb_ControllersBody}" Style="{StaticResource Caption}" FontSize="13" Margin="0,0,0,16" />
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <controls:StatusBadge State="{Binding ControllersState}" Margin="0,0,10,0" />
+                                <TextBlock Text="{Binding ControllersSummary}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <ItemsControl ItemsSource="{Binding Devices}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <DockPanel Margin="0,4">
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding StateText}" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                            <controls:StatusBadge State="{Binding State}" Margin="0,0,10,0" />
+                                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Button Content="{x:Static loc:Strings.Ble_BtnSearch}" Command="{Binding StartScanCommand}" HorizontalAlignment="Left" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource Card}" Visibility="{Binding HasLocalInput, Converter={StaticResource BoolToVis}}">
+                        <CheckBox Content="{x:Static loc:Strings.Devices_UseKeyboard}" IsChecked="{Binding KeyboardInputEnabled}" />
+                    </Border>
+                </StackPanel>
+
+                <!-- 3. Trainer -->
+                <StackPanel Visibility="{Binding IsOnbTrainer, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{x:Static loc:Strings.Onb_TrainerTitle}" Style="{StaticResource PageTitle}" Margin="0,0,0,8" />
+                    <TextBlock Text="{x:Static loc:Strings.Onb_TrainerBody}" Style="{StaticResource Caption}" FontSize="13" Margin="0,0,0,16" />
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <Border Background="{StaticResource Bg}" CornerRadius="10" Padding="3" HorizontalAlignment="Left" Margin="0,0,0,12">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton Content="Wi-Fi" IsChecked="{Binding UseWifi}" GroupName="onbTransport" Style="{StaticResource SegmentedRadio}" />
+                                    <RadioButton Content="Bluetooth" IsChecked="{Binding UseBluetooth}" GroupName="onbTransport" Style="{StaticResource SegmentedRadio}" />
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Visibility="{Binding UseWifi, Converter={StaticResource BoolToVis}}">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                    <Button Content="{x:Static loc:Strings.Trainer_BtnFind}" Command="{Binding FindTrainersCommand}" />
+                                    <TextBlock Text="{x:Static loc:Strings.Wifi_Searching}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                               Visibility="{Binding IsSearchingTrainer, Converter={StaticResource BoolToVis}}" />
+                                </StackPanel>
+                                <Grid>
+                                    <ListBox x:Name="OnbWifiList" ItemsSource="{Binding FoundTrainers}" SelectedItem="{Binding SelectedTrainer}" MinHeight="56" MaxHeight="160" />
+                                    <TextBlock Text="{x:Static loc:Strings.List_TrainersEmpty}" Style="{StaticResource Caption}" Margin="10,8" IsHitTestVisible="False"
+                                               Visibility="{Binding HasItems, ElementName=OnbWifiList, Converter={StaticResource InvBoolToVis}}" />
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Visibility="{Binding UseBluetooth, Converter={StaticResource BoolToVis}}">
+                                <Button Content="{Binding BleScanButtonText}" Command="{Binding ToggleBleScanCommand}" HorizontalAlignment="Left" Margin="0,0,0,10" />
+                                <Grid>
+                                    <ListBox x:Name="OnbBleList" ItemsSource="{Binding FoundBleTrainers}" SelectedItem="{Binding SelectedBleTrainer}" MinHeight="56" MaxHeight="160" />
+                                    <TextBlock Text="{x:Static loc:Strings.List_TrainersEmpty}" Style="{StaticResource Caption}" Margin="10,8" IsHitTestVisible="False"
+                                               Visibility="{Binding HasItems, ElementName=OnbBleList, Converter={StaticResource InvBoolToVis}}" />
+                                </Grid>
+                            </StackPanel>
+                            <TextBlock Text="{Binding TrainerStatus}" Style="{StaticResource Caption}" Margin="0,10,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 4. Appli d'entraînement : consigne et indicateur de connexion -->
+                <StackPanel Visibility="{Binding IsOnbApp, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{x:Static loc:Strings.Onb_AppTitle}" Style="{StaticResource PageTitle}" Margin="0,0,0,8" />
+                    <TextBlock Text="{Binding OnboardingAppText}" TextWrapping="Wrap" FontSize="15" LineHeight="22" Margin="0,0,0,16" />
+                    <Border Style="{StaticResource Card}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <controls:StatusBadge State="{Binding AppState}" Margin="0,0,10,0" />
+                                <TextBlock Text="{Binding AppSummary}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding AppDetail}" Style="{StaticResource Caption}" Margin="0,6,0,0" />
+                            <TextBox Text="{Binding LocalAddressText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                                     Foreground="{StaticResource TextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,10,0,0" Padding="0"
+                                     Visibility="{Binding LocalAddressText, Converter={StaticResource NullToCollapsed}}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- 5. Récapitulatif -->
+                <StackPanel Visibility="{Binding IsOnbDone, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{x:Static loc:Strings.Onb_DoneTitle}" Style="{StaticResource PageTitle}" FontSize="32" Margin="0,0,0,12" />
+                    <UniformGrid Columns="3" Margin="0,0,0,14">
+                        <Border Style="{StaticResource Card}" Margin="0,0,8,0">
+                            <controls:StatusTile State="{Binding ControllersState}" Title="{x:Static loc:Strings.Home_SecControllers}"
+                                                 Summary="{Binding ControllersSummary}" Detail="{Binding ControllersDetail}" />
+                        </Border>
+                        <Border Style="{StaticResource Card}" Margin="4,0">
+                            <controls:StatusTile State="{Binding TrainerState}" Title="{x:Static loc:Strings.Home_SecTrainer}"
+                                                 Summary="{Binding TrainerSummary}" Detail="{Binding TrainerDetail}" />
+                        </Border>
+                        <Border Style="{StaticResource Card}" Margin="8,0,0,0">
+                            <controls:StatusTile State="{Binding AppState}" Title="{x:Static loc:Strings.Home_SecApp}"
+                                                 Summary="{Binding AppSummary}" Detail="{Binding AppDetail}" />
+                        </Border>
+                    </UniformGrid>
+                    <Button Content="{Binding ProxyButtonText}" Command="{Binding ToggleProxyCommand}" Style="{StaticResource PrimaryButton}"
+                            HorizontalAlignment="Left" Padding="18,10" Margin="0,0,0,14"
+                            Visibility="{Binding CanStartFromOnboarding, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Text="{x:Static loc:Strings.Onb_DoneBody}" Style="{StaticResource Caption}" FontSize="13" />
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

@@ -60,11 +60,20 @@ internal sealed class MauiAppHost : IAppHost
 {
     public string AppVersion => AppInfo.Current.VersionString;
 
+    public bool IsTouch => true;
+
+    public bool AsksPermissions => true;
+
+    public Task RequestPermissionsAsync() =>
+        MainThread.InvokeOnMainThreadAsync(() => MainActivity.Current?.RequestBridgePermissionsAsync() ?? Task.CompletedTask);
+
     private static Page? CurrentPage => Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault()?.Page;
 
-    public Task<bool> ConfirmAsync(string message) =>
+    public Task<bool> ConfirmAsync(string message) => ConfirmAsync(message, ShiftBridge.Core.Localization.Strings.State_Ok);
+
+    public Task<bool> ConfirmAsync(string message, string confirmLabel) =>
         MainThread.InvokeOnMainThreadAsync(async () =>
-            CurrentPage is { } page && await page.DisplayAlertAsync("ShiftBridge", message, ShiftBridge.Core.Localization.Strings.State_Ok, ShiftBridge.Core.Localization.Strings.Buttons_Cancel));
+            CurrentPage is { } page && await page.DisplayAlertAsync("ShiftBridge", message, confirmLabel, ShiftBridge.Core.Localization.Strings.Buttons_Cancel));
 
     public Task<string?> PromptTextAsync(string message, string initial) =>
         MainThread.InvokeOnMainThreadAsync(async () =>
@@ -170,4 +179,29 @@ internal sealed class MauiAppHost : IAppHost
         }
         catch { /* aucun navigateur disponible */ }
     }
+
+    /// <summary>Export : fichier écrit dans le cache de l'appli puis proposé au partage (Drive, Fichiers, e-mail…).</summary>
+    public Task<bool> SaveTextFileAsync(string suggestedName, string content) =>
+        MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            string path = System.IO.Path.Combine(FileSystem.CacheDirectory, suggestedName);
+            await System.IO.File.WriteAllTextAsync(path, content, new System.Text.UTF8Encoding(false));
+            await Share.Default.RequestAsync(new ShareFileRequest
+            {
+                Title = ShiftBridge.Core.Localization.Strings.Backup_Title,
+                File = new ShareFile(path, "application/json"),
+            });
+            return true;
+        });
+
+    /// <summary>Import : sélecteur de fichiers du système.</summary>
+    public Task<string?> OpenTextFileAsync() =>
+        MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            var file = await FilePicker.Default.PickAsync(new PickOptions { PickerTitle = ShiftBridge.Core.Localization.Strings.Backup_Title });
+            if (file is null) return null;
+            await using var stream = await file.OpenReadAsync();
+            using var reader = new System.IO.StreamReader(stream);
+            return (string?)await reader.ReadToEndAsync();
+        });
 }

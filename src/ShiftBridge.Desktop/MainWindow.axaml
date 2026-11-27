@@ -9,6 +9,7 @@
         Background="#10171D" Foreground="#EEF5F3" WindowStartupLocation="CenterScreen">
   <Window.Resources>
     <desktop:PageIndexConverter x:Key="PageIndex" />
+    <desktop:UiStateBrushConverter x:Key="StateBrush" />
   </Window.Resources>
   <Window.Styles>
     <Style Selector="TextBlock">
@@ -48,6 +49,16 @@
       <Setter Property="Foreground" Value="#102823" />
       <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
+    <!-- Vitesse estompée tant qu'elle n'est appliquée à rien (virtual shifting arrêté) -->
+    <Style Selector="TextBlock.dim">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+    <!-- Pastille d'état -->
+    <Style Selector="Ellipse.badge">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <Style Selector="TabItem">
       <Setter Property="Padding" Value="10,8" />
     </Style>
@@ -68,7 +79,9 @@
         </Grid>
       </Border>
     </StackPanel>
-    <TabControl Grid.Row="1" SelectedIndex="{Binding CurrentPage, Converter={StaticResource PageIndex}}">
+    <!-- Assistant de démarrage : à la place des onglets -->
+    <views:OnboardingView Grid.Row="1" IsVisible="{Binding IsOnboarding}" />
+    <TabControl Grid.Row="1" IsVisible="{Binding !IsOnboarding}" SelectedIndex="{Binding CurrentPage, Converter={StaticResource PageIndex}}">
       <TabItem Header="{x:Static loc:Strings.Nav_Home}"><views:HomeView /></TabItem>
       <TabItem Header="{x:Static loc:Strings.Nav_Controllers}"><views:DevicesView /></TabItem>
       <TabItem Header="{x:Static loc:Strings.Nav_Buttons}"><views:ButtonsView /></TabItem>

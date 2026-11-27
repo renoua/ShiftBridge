@@ -62,6 +62,12 @@ public sealed class BleButtonController : IController
     private readonly ControllerSpec _spec;
     private readonly ButtonStateTracker _tracker = new();
     private readonly object _trackerLock = new();
+    /// <summary>Touches déjà construites, par nom (évite une chaîne par touche et par notification). Protégé par _trackerLock.</summary>
+    private readonly Dictionary<string, ButtonKey> _keyCache = new(StringComparer.Ordinal);
+    /// <summary>Touches tenues à la trame précédente (copie) : une trame identique ne reconstruit rien. Protégé par _trackerLock.</summary>
+    private HashSet<string>? _lastHeld;
+    /// <summary>Premiers octets des trames non reconnues déjà journalisées (une ligne par type, sauf journal détaillé).</summary>
+    private readonly bool[] _unknownLogged = new bool[256];
     private readonly SemaphoreSlim _tapGate = new(1, 1);
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private IButtonDecoder _decoder;
@@ -296,7 +302,10 @@ public sealed class BleButtonController : IController
 
         if (frame is null)
         {
-            Frame?.Invoke($"{Info.Name} < {Convert.ToHexString(data)} (non reconnue)");
+            // Trame d'état périodique d'un modèle mal connu : une ligne par type, sinon elle envahirait le journal.
+            bool first = data.Length > 0 && !_unknownLogged[data[0]];
+            if (data.Length > 0) _unknownLogged[data[0]] = true;
+            if (VerboseFrames || first) Frame?.Invoke($"{Info.Name} < {Convert.ToHexString(data)} (non reconnue)");
             return;
         }
         Process(frame, data);
@@ -309,19 +318,26 @@ public sealed class BleButtonController : IController
     private void Process(DecodedFrame frame, byte[]? raw)
     {
         List<ButtonEvent> events = [];
-        if (frame.Held is { } held)
+        List<ButtonKey> taps = [];
+        lock (_trackerLock)
         {
-            var keys = held.Select(n => ButtonKey.Controller(Info.Kind, n)).ToHashSet();
-            lock (_trackerLock) events = _tracker.Update(keys);
+            // Certains modèles notifient en continu (Elite Square, KICKR Bike…) : une trame identique à la précédente ne change rien.
+            if (frame.Held is { } held && (_lastHeld is null || !_lastHeld.SetEquals(held)))
+            {
+                _lastHeld = new HashSet<string>(held, StringComparer.Ordinal);
+                var keys = new HashSet<ButtonKey>();
+                foreach (var n in held) keys.Add(KeyFor(n));
+                events = _tracker.Update(keys);
+            }
+            foreach (var n in frame.Taps) taps.Add(KeyFor(n));
         }
-        var taps = frame.Taps.Select(n => ButtonKey.Controller(Info.Kind, n)).ToList();
 
         if (raw is not null && (VerboseFrames || events.Count > 0 || taps.Count > 0 || _frameCount == 1))
             Frame?.Invoke($"{Info.Name} < {Convert.ToHexString(raw)}");
         else if (raw is null && taps.Count > 0)
             Frame?.Invoke($"{Info.Name} : {string.Join(", ", frame.Taps)}{(frame.Detail is { } detail ? $" ({detail})" : "")}");
 
-        if (frame.BatteryPercent is { } pct and >= 0 and <= 100) { BatteryPercent = pct; BatteryChanged?.Invoke(pct); }
+        if (frame.BatteryPercent is { } pct and >= 0 and <= 100 && pct != BatteryPercent) { BatteryPercent = pct; BatteryChanged?.Invoke(pct); }
         if (events.Count > 0) ButtonEvents?.Invoke(events);
         if (taps.Count > 0) _ = EmitTapsAsync(taps);
     }
@@ -352,10 +368,16 @@ public sealed class BleButtonController : IController
         _disconnected?.TrySetResult();
     }
 
+    private ButtonKey KeyFor(string name)
+    {
+        if (!_keyCache.TryGetValue(name, out var key)) _keyCache[name] = key = ButtonKey.Controller(Info.Kind, name);
+        return key;
+    }
+
     private void ReleaseAllButtons()
     {
         List<ButtonEvent> events;
-        lock (_trackerLock) events = _tracker.Reset();
+        lock (_trackerLock) { events = _tracker.Reset(); _lastHeld = null; }
         if (events.Count > 0) ButtonEvents?.Invoke(events);
     }
 

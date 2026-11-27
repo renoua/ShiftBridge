@@ -28,7 +28,22 @@
         </StackPanel>
       </Border>
       <Border Classes="card">
-        <Button Content="{x:Static loc:Strings.Settings_PrivacyPolicy}" Command="{Binding OpenPrivacyPolicyCommand}" />
+        <StackPanel Spacing="10">
+          <TextBlock Classes="section" Text="{x:Static loc:Strings.Backup_Title}" />
+          <TextBlock Classes="detail" Text="{x:Static loc:Strings.Backup_Help}" TextWrapping="Wrap" />
+          <WrapPanel>
+            <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Backup_Export}" Command="{Binding ExportSettingsCommand}" />
+            <Button Content="{x:Static loc:Strings.Backup_Import}" Command="{Binding ImportSettingsCommand}" />
+          </WrapPanel>
+          <TextBlock Classes="detail" Text="{Binding BackupStatus}" TextWrapping="Wrap"
+                     IsVisible="{Binding BackupStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </Border>
+      <Border Classes="card">
+        <WrapPanel>
+          <Button Margin="0,0,8,0" Content="{x:Static loc:Strings.Settings_OpenOnboarding}" Command="{Binding OpenOnboardingCommand}" />
+          <Button Content="{x:Static loc:Strings.Settings_PrivacyPolicy}" Command="{Binding OpenPrivacyPolicyCommand}" />
+        </WrapPanel>
       </Border>
     </StackPanel>
   </ScrollViewer>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia.Data;
 using Avalonia.Data.Converters;
 using ShiftBridge.Presentation;
 
@@ -8,6 +9,9 @@ public sealed class PageIndexConverter : IValueConverter
 {
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
+        // L'assistant n'a pas d'onglet : l'onglet affiché ne change pas (sinon, sans onglet valide, le retour de la liaison
+        // ramènerait aussitôt à l'Accueil et fermerait l'assistant).
+        if (Equals(value, Pages.Onboarding)) return BindingOperations.DoNothing;
         for (int i = 0; i < Pages.All.Count; i++)
             if (Equals(Pages.All[i], value)) return i;
 

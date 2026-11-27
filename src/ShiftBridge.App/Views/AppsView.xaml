@@ -36,6 +36,10 @@
                         </StackPanel>
                         <CheckBox Grid.Column="1" IsChecked="{Binding EnableNetwork}" AutomationProperties.Name="{x:Static loc:Strings.Apps_WifiLan}" />
                     </Grid>
+                    <!-- Adresse et port à saisir dans l'appli si elle ne trouve pas ShiftBridge toute seule (sélectionnable pour la copier) -->
+                    <TextBox Text="{Binding LocalAddressText, Mode=OneWay}" IsReadOnly="True" BorderThickness="0" Background="Transparent"
+                             Foreground="{StaticResource TextMuted}" FontSize="12" TextWrapping="Wrap" Margin="0,10,0,0" Padding="0"
+                             Visibility="{Binding LocalAddressText, Converter={StaticResource NullToCollapsed}}" />
                     <TextBlock Style="{StaticResource Caption}" Margin="0,16,0,0"
                                Text="{x:Static loc:Strings.Apps_AtLeastOne}" />
                 </StackPanel>

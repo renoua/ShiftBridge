@@ -1,3 +1,4 @@
+using ShiftBridge.Core.Localization;
 using ShiftBridge.Core.Trainer;
 using ShiftBridge.Platform.Ble;
 
@@ -6,7 +7,14 @@ namespace ShiftBridge.Platform.Sensors;
 public sealed record DiscoveredHeartRateSensor(BleDeviceId Address, string Name, short Rssi)
 {
     public string AddressText => Address.ToString();
-    public override string ToString() => $"{Name}  ·  {Rssi} dBm";
+
+    /// <summary>Capteur mémorisé (proposé au lancement, sans annonce reçue) : signal inconnu.</summary>
+    public bool Remembered { get; init; }
+
+    /// <summary>Signal reçu ; « Dernier utilisé » pour un capteur mémorisé (0 dBm n'est pas une mesure).</summary>
+    public string DetailText => Remembered ? Strings.Device_Remembered : Rssi == 0 ? "" : $"{Rssi} dBm";
+
+    public override string ToString() => DetailText.Length == 0 ? Name : $"{Name}  ·  {DetailText}";
 }
 
 /// <summary>Recherche des capteurs cardio Bluetooth : annonces du service Heart Rate (0x180D). Exclut nos propres appareils.</summary>

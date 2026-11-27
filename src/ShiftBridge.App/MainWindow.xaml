@@ -60,5 +60,9 @@
             <views:SettingsView Visibility="{Binding CurrentPage, Converter={StaticResource EqualsToVis}, ConverterParameter=settings}" />
             <views:DiagnosticView Visibility="{Binding CurrentPage, Converter={StaticResource EqualsToVis}, ConverterParameter=diagnostic}" />
         </Grid>
+
+        <!-- Assistant de démarrage : par-dessus toute la fenêtre (barre latérale comprise) -->
+        <views:OnboardingView Grid.ColumnSpan="2" Panel.ZIndex="10"
+                              Visibility="{Binding CurrentPage, Converter={StaticResource EqualsToVis}, ConverterParameter=onboarding}" />
     </Grid>
 </Window>

@@ -30,7 +30,25 @@ public partial class SettingsView : UserControl
 
 public partial class DiagnosticView : UserControl
 {
-    public DiagnosticView() => InitializeComponent();
+    /// <summary>Vrai tant que l'utilisateur est en bas du journal : les nouvelles lignes y défilent alors d'elles-mêmes.</summary>
+    private bool _followTail = true;
+
+    public DiagnosticView()
+    {
+        InitializeComponent();
+        LogBox.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler((_, e) =>
+        {
+            // Défilement de l'utilisateur (et non ajout de texte) : on retient s'il est revenu en bas.
+            if (e.ExtentHeightChange == 0) _followTail = e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 4;
+        }));
+        LogBox.TextChanged += (_, _) => { if (_followTail) LogBox.ScrollToEnd(); };
+        IsVisibleChanged += (_, _) => { if (IsVisible && _followTail) LogBox.ScrollToEnd(); };
+    }
+}
+
+public partial class OnboardingView : UserControl
+{
+    public OnboardingView() => InitializeComponent();
 }
 
 public partial class DevicesView : UserControl
