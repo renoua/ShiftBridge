@@ -29,7 +29,7 @@ public static class SramCrypto
 
     /// <summary>
     /// Clé publique = 5^privée mod p, sur 16 octets gros-boutiste. Les 16 octets de la clé PRIVÉE forment l'exposant en
-    /// gros-boutiste (vérifié avec le vecteur de test publié ; voir les tests).
+    /// PETIT-boutiste (c'est ce que donne le vecteur de test publié ; voir les tests).
     /// </summary>
     public static byte[] PublicKey(byte[] privateKey)
     {

@@ -8,11 +8,11 @@
     <Nullable>enable</Nullable>
     <AssemblyName>ShiftBridge</AssemblyName>
     <RootNamespace>ShiftBridge.MacOS</RootNamespace>
-    <Version>0.25.1</Version>
+    <Version>0.25.2</Version>
     <ApplicationId>com.antoinerenou.shiftbridge</ApplicationId>
     <ApplicationTitle>ShiftBridge</ApplicationTitle>
     <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
-    <ApplicationVersion>2501</ApplicationVersion>
+    <ApplicationVersion>2502</ApplicationVersion>
     <CreatePackage>false</CreatePackage>
     <TrimMode>copy</TrimMode>
     <SatelliteResourceLanguages>en;fr</SatelliteResourceLanguages>

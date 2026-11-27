@@ -158,6 +158,9 @@
   <data name="Log_AutoStartFailed" xml:space="preserve"><value>Automatic start failed: {0}</value></data>
   <data name="Log_VibrationTest" xml:space="preserve"><value>Vibration test: {0}</value></data>
   <data name="Log_SaveFailed" xml:space="preserve"><value>Could not save the configuration: {0}</value></data>
+  <data name="Log_ShiftingModeFailed" xml:space="preserve"><value>Could not change who handles virtual shifting: {0}</value></data>
+  <data name="Log_NativeModeFailed" xml:space="preserve"><value>Could not change the native Zwift mode: {0}</value></data>
+  <data name="Log_TransportsFailed" xml:space="preserve"><value>Could not apply the app connections: {0}</value></data>
   <data name="BtnGroup_Click" xml:space="preserve"><value>Zwift Click</value></data>
   <data name="BtnGroup_Right" xml:space="preserve"><value>Right controller</value></data>
   <data name="BtnGroup_Left" xml:space="preserve"><value>Left controller</value></data>

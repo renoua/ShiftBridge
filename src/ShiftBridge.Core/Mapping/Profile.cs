@@ -30,7 +30,35 @@ public static class AppProfileKey
 public sealed class Profile
 {
     public string Name { get; set; } = "Par défaut";
-    public Dictionary<ButtonKey, ButtonBinding> Bindings { get; set; } = [];
+
+    /// <summary>
+    /// Assignations. Le dictionnaire publié n'est JAMAIS modifié en place une fois le profil en service : chaque changement
+    /// (<see cref="SetBinding"/>, <see cref="ApplyControllerDefaults"/>) publie une copie. Le mapping (fil Bluetooth), la
+    /// sauvegarde et l'interface peuvent donc le lire sans verrou, sans jamais voir un dictionnaire à moitié modifié.
+    /// </summary>
+    public Dictionary<ButtonKey, ButtonBinding> Bindings
+    {
+        get => Volatile.Read(ref _bindings);
+        set => Volatile.Write(ref _bindings, value);
+    }
+    private Dictionary<ButtonKey, ButtonBinding> _bindings = [];
+
+    /// <summary>Sérialise les écrivains entre eux (deux copies concurrentes perdraient l'une des modifications).</summary>
+    private readonly object _writeLock = new();
+
+    /// <summary>Assigne (ou retire, si <paramref name="binding"/> est null) une touche, par copie du dictionnaire.</summary>
+    public void SetBinding(ButtonKey key, ButtonBinding? binding)
+    {
+        lock (_writeLock)
+        {
+            var copy = new Dictionary<ButtonKey, ButtonBinding>(Bindings);
+            if (binding is null) { if (!copy.Remove(key)) return; }
+            else copy[key] = binding;
+            Bindings = copy;
+        }
+    }
+
+    public void RemoveBinding(ButtonKey key) => SetBinding(key, null);
 
     public Profile Clone()
     {
@@ -92,16 +120,21 @@ public sealed class Profile
     /// <summary>Ajoute les assignations par défaut d'un modèle, sans toucher à celles qui existent déjà. Vrai si le profil a changé.</summary>
     public bool ApplyControllerDefaults(ControllerKind kind, IReadOnlyCollection<string>? only = null)
     {
-        bool changed = false;
-        foreach (var (name, action) in ControllerDefaults(kind))
+        lock (_writeLock)
         {
-            if (only is not null && !only.Contains(name)) continue;
-            var key = ButtonKey.Controller(kind, name);
-            if (Bindings.ContainsKey(key)) continue;
-            Bindings[key] = new ButtonBinding { Actions = [action] };
-            changed = true;
+            Dictionary<ButtonKey, ButtonBinding>? copy = null;
+            foreach (var (name, action) in ControllerDefaults(kind))
+            {
+                if (only is not null && !only.Contains(name)) continue;
+                var key = ButtonKey.Controller(kind, name);
+                if ((copy ?? Bindings).ContainsKey(key)) continue;
+                copy ??= new Dictionary<ButtonKey, ButtonBinding>(Bindings);
+                copy[key] = new ButtonBinding { Actions = [action] };
+            }
+            if (copy is null) return false;
+            Bindings = copy;
+            return true;
         }
-        return changed;
     }
 
     /// <summary>

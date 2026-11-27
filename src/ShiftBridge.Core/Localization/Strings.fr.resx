@@ -158,6 +158,9 @@
   <data name="Log_AutoStartFailed" xml:space="preserve"><value>Démarrage automatique impossible : {0}</value></data>
   <data name="Log_VibrationTest" xml:space="preserve"><value>Test vibration : {0}</value></data>
   <data name="Log_SaveFailed" xml:space="preserve"><value>Sauvegarde de la configuration impossible : {0}</value></data>
+  <data name="Log_ShiftingModeFailed" xml:space="preserve"><value>Changement de gestion des vitesses impossible : {0}</value></data>
+  <data name="Log_NativeModeFailed" xml:space="preserve"><value>Changement du mode natif Zwift impossible : {0}</value></data>
+  <data name="Log_TransportsFailed" xml:space="preserve"><value>Connexions aux applis non appliquées : {0}</value></data>
   <data name="BtnGroup_Click" xml:space="preserve"><value>Zwift Click</value></data>
   <data name="BtnGroup_Right" xml:space="preserve"><value>Manette droite</value></data>
   <data name="BtnGroup_Left" xml:space="preserve"><value>Manette gauche</value></data>

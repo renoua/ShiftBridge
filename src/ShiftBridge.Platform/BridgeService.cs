@@ -60,6 +60,7 @@ public sealed class BridgeService : IAsyncDisposable
         Config = config;
         _mapping.Profile = _defaultProfile = config.Profile;
         _vsModel.SlopeOnly = config.SlopeOnlyMode;
+        _vsModel.TotalMassKg = config.RiderWeightKg + config.BikeWeightKg; // corrections de pente : masse réglée, et non 85 kg fixes
         var saved = new Drivetrain(config.ChainringTeeth, config.CogTeeth);
         Drivetrain = saved.IsValid ? saved : Drivetrain.Default;
         _vsModel.ReferenceRatio = Drivetrain.Ratio;
@@ -235,6 +236,8 @@ public sealed class BridgeService : IAsyncDisposable
     /// <summary>Retient l'appli connectée (null : plus aucune) et en active le profil.</summary>
     private void SetConnectedApp(string? appId)
     {
+        // Même appli qu'avant (reconnexion, App Info renvoyée) : rien ne change, l'onglet Touches n'a pas à se reconstruire.
+        if ((appId?.Trim() ?? "") == _connectedAppId) return;
         _connectedAppId = appId?.Trim() ?? "";
         _connectedAppKey = AppProfileKey.Normalize(appId);
         UpdateActiveProfile();
@@ -352,6 +355,11 @@ public sealed class BridgeService : IAsyncDisposable
             if (device.Kind != ControllerKind.Zwift) RegisterControllerKind(key, device.Kind);
             c.Start();
             DevicesChanged?.Invoke();
+        }
+        else
+        {
+            // Deux annonces simultanées de la même manette : la seconde instance, jamais démarrée, est libérée.
+            _ = c.DisposeAsync().AsTask();
         }
     }
 
@@ -474,8 +482,12 @@ public sealed class BridgeService : IAsyncDisposable
     }
 
     /// <summary>Reconnecte au démarrage les manettes déjà connues, dès qu'elles réapparaissent dans le scan.</summary>
+    private int _autoConnectInstalled;
+
+    /// <summary>Reconnecte les manettes connues dès qu'elles sont vues. Idempotent : un second appel n'ajoute pas de gestionnaire.</summary>
     public void AutoConnectKnown()
     {
+        if (Interlocked.Exchange(ref _autoConnectInstalled, 1) != 0) return;
         _scanner.DeviceSeen += d =>
         {
             if (Config.AutoReconnect && IsKnown(d.AddressText) && !_manuallyDisconnected.ContainsKey(d.AddressText)) Connect(d);
@@ -697,14 +709,20 @@ public sealed class BridgeService : IAsyncDisposable
     public async Task SetAppHandlesShiftingAsync(bool value)
     {
         if (Config.AppHandlesShifting == value) return;
-        lock (_dispatchLock)
+        // Sous le verrou du proxy : un proxy en cours de démarrage ou de redémarrage ne peut plus manquer le changement.
+        await _proxyGate.WaitAsync();
+        try
         {
-            Config.AppHandlesShifting = value;
-            _mapping.AlwaysAllowed = _proxy is not null && !value ? ProxyShiftActions : NoActions;
+            lock (_dispatchLock)
+            {
+                Config.AppHandlesShifting = value;
+                _mapping.AlwaysAllowed = _proxy is not null && !value ? ProxyShiftActions : NoActions;
+            }
+            if (value) ReleaseReportedGear(); // l'appli a ses propres vitesses : ne plus lui imposer celle de ShiftBridge
+            if (_proxy is { } p) await p.SetShiftingEnabledAsync(!value, Config.NativeZwiftMode);
+            if (!value) ReportGear(force: true);
         }
-        if (value) ReleaseReportedGear(); // l'appli a ses propres vitesses : ne plus lui imposer celle de ShiftBridge
-        if (_proxy is { } p) await p.SetShiftingEnabledAsync(!value, Config.NativeZwiftMode);
-        if (!value) ReportGear(force: true);
+        finally { _proxyGate.Release(); }
         Log?.Invoke(value
             ? "Vitesses gérées par l'appli : + et − lui sont transmis, le trainer est relayé sans modification."
             : "Vitesses gérées par ShiftBridge (virtual shifting du proxy trainer).");
@@ -718,8 +736,13 @@ public sealed class BridgeService : IAsyncDisposable
     /// <summary>Active/désactive le mode natif ; appliqué aussitôt si le proxy tourne (repli FTMS si le trainer ne le supporte pas).</summary>
     public async Task SetNativeZwiftModeAsync(bool enabled)
     {
-        Config.NativeZwiftMode = enabled;
-        if (_proxy is { } p) await p.SetNativeModeAsync(enabled);
+        await _proxyGate.WaitAsync();
+        try
+        {
+            Config.NativeZwiftMode = enabled;
+            if (_proxy is { } p) await p.SetNativeModeAsync(enabled);
+        }
+        finally { _proxyGate.Release(); }
         TrainerChanged?.Invoke();
     }
 
@@ -728,7 +751,12 @@ public sealed class BridgeService : IAsyncDisposable
     {
         Config.RiderWeightKg = Math.Clamp(riderKg, 30, 200);
         Config.BikeWeightKg = Math.Clamp(bikeKg, 3, 30);
-        if (_proxy is { } p) _ = p.ApplyWeightsAsync(Config.RiderWeightKg, Config.BikeWeightKg);
+        _vsModel.TotalMassKg = Config.RiderWeightKg + Config.BikeWeightKg;
+        if (_proxy is { } p)
+        {
+            _ = p.ApplyWeightsAsync(Config.RiderWeightKg, Config.BikeWeightKg);
+            _ = p.ReapplyAsync(); // la pente corrigée dépend de la masse
+        }
     }
 
     /// <summary>Braquet physique du vélo : sert de rapport de référence au virtual shifting (k = rapport virtuel ÷ rapport réel).</summary>
@@ -771,6 +799,7 @@ public sealed class BridgeService : IAsyncDisposable
     private readonly BleHeartRateScanner _hrScanner;
     private readonly ConcurrentDictionary<BleDeviceId, DiscoveredHeartRateSensor> _hrSensors = new();
     private HeartRateSource? _hrSource;
+    private BleDeviceId? _hrAddress;
     private TrainerEndpoint? _proxyEndpoint; // pour redémarrer le proxy quand le capteur change
 
     public bool HeartRateConnected => _hrSource is not null;
@@ -805,12 +834,17 @@ public sealed class BridgeService : IAsyncDisposable
         try
         {
             StopHeartRateScan();
-            await DropHeartRateCoreAsync();
+            // Même capteur : il faut libérer l'ancienne liaison d'abord (beaucoup de ceintures n'en acceptent qu'une).
+            // Autre capteur : on connecte le nouveau AVANT de lâcher l'ancien, qui reste en service si la connexion échoue.
+            if (_hrAddress == address) await DropHeartRateCoreAsync();
             var source = new HeartRateSource(_platform.Central, address, name);
             source.Log += m => Log?.Invoke($"[Cardio] {m}");
             source.StateChanged += _ => HeartRateChanged?.Invoke();
-            await source.ConnectAsync();
+            try { await source.ConnectAsync(); }
+            catch { try { await source.DisposeAsync(); } catch { } throw; }
+            await DropHeartRateCoreAsync();
             _hrSource = source;
+            _hrAddress = address;
             Config.HeartRateBleAddress = address.ToSavedAddress();
             Config.HeartRateBleName = name;
             Log?.Invoke($"Capteur cardio connecté : {name}");
@@ -838,14 +872,92 @@ public sealed class BridgeService : IAsyncDisposable
     {
         var s = _hrSource;
         _hrSource = null;
+        _hrAddress = null;
         if (s is not null) { try { await s.DisposeAsync(); } catch { } }
     }
 
+    /// <summary>
+    /// Republie le proxy avec le nouveau capteur, SANS couper la liaison au trainer : seule l'appli d'entraînement se reconnecte.
+    /// Un échec est journalisé comme une erreur du proxy trainer (et non du capteur, qui, lui, est bien connecté).
+    /// </summary>
     private async Task RestartProxyForHeartRateAsync()
     {
-        if (_proxy is null || _proxyEndpoint is not { } endpoint) return;
-        Log?.Invoke("Cardio : redémarrage du proxy trainer pour republier le capteur.");
-        await StartTrainerProxyCoreAsync(endpoint);
+        if (_proxy is not { } old || _trainerLink is not { } link || _proxyEndpoint is not { } endpoint) return;
+        Log?.Invoke("Cardio : redémarrage du proxy trainer pour republier le capteur (liaison au trainer conservée).");
+        _proxy = null;
+        try { await old.DisposeAsync(); } catch (Exception ex) { Log?.Invoke($"[Proxy trainer] Arrêt incomplet : {ex.Message}"); }
+
+        var d = DescribeEndpoint(endpoint);
+        DirConTrainerProxy? proxy = null;
+        try
+        {
+            proxy = CreateProxy(link, d.Policy, d.Txt, d.Label, d.Transport);
+            await proxy.StartAsync();
+            _proxy = proxy;
+            ReportGear(force: true);
+            Log?.Invoke($"Proxy trainer republié (port {proxy.Port}).");
+        }
+        catch (Exception ex)
+        {
+            if (proxy is not null) { try { await proxy.DisposeAsync(); } catch { } }
+            Log?.Invoke($"[Proxy trainer] Redémarrage impossible : {ex.Message}. Réactivez le virtual shifting dans la page Trainer.");
+            await StopTrainerProxyCoreAsync();
+        }
+        TrainerChanged?.Invoke();
+    }
+
+    /// <summary>Paramètres de connexion et de republication propres au type de trainer (Wi-Fi DirCon ou Bluetooth).</summary>
+    private (Func<CancellationToken, Task<ITrainerLink>> Factory, GattRelayPolicy Policy, IReadOnlyDictionary<string, string>? Txt,
+        string Label, string Transport) DescribeEndpoint(TrainerEndpoint endpoint)
+    {
+        switch (endpoint)
+        {
+            case TrainerEndpoint.DirCon d:
+                return (async ct =>
+                {
+                    var c = new DirConClient();
+                    c.Log += m => Log?.Invoke($"[Trainer] {m}");
+                    try
+                    {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        timeout.CancelAfter(TimeSpan.FromSeconds(8));
+                        await c.ConnectAsync(d.Host, d.Port, timeout.Token);
+                    }
+                    catch { await c.DisposeAsync(); throw; }
+                    return c;
+                }, new GattRelayPolicy(full: true) /* comportement validé sur KICKR */, d.Txt, d.Host, "Wi-Fi (DirCon)");
+
+            case TrainerEndpoint.Ble b:
+                return (async ct =>
+                {
+                    var l = new BleTrainerLink(_platform.Central, b.Address, b.Name);
+                    l.Log += m => Log?.Invoke($"[Trainer] {m}");
+                    try { await l.ConnectAsync(ct); }
+                    catch { await l.DisposeAsync(); throw; }
+                    return l;
+                }, new GattRelayPolicy(Config.FullRelay), null, b.Name, "Bluetooth");
+
+            default: throw new ArgumentException("Type de trainer inconnu.", nameof(endpoint));
+        }
+    }
+
+    private DirConTrainerProxy CreateProxy(ITrainerLink link, GattRelayPolicy policy, IReadOnlyDictionary<string, string>? txt,
+        string label, string transport)
+    {
+        var proxy = new DirConTrainerProxy(link, _vsModel, txt, policy: policy, trainerLabel: label, transportLabel: transport,
+            mdns: _mdns?.CreateAdvertiser())
+        {
+            Enabled = !Config.AppHandlesShifting, // l'appli gère les vitesses : relais pur
+            NativeZwiftMode = Config.NativeZwiftMode,
+            RiderWeightKg = Config.RiderWeightKg,
+            BikeWeightKg = Config.BikeWeightKg,
+            HeartRate = _hrSource,
+            LogWire = _verboseFrames,
+        };
+        proxy.Log += m => Log?.Invoke($"[Proxy trainer] {m}");
+        proxy.ClientsChanged += () => TrainerChanged?.Invoke();
+        proxy.NativeStateChanged += () => TrainerChanged?.Invoke();
+        return proxy;
     }
 
     public LinkState? TrainerLinkState => _trainerLink?.State;
@@ -891,47 +1003,15 @@ public sealed class BridgeService : IAsyncDisposable
         await StopTrainerProxyCoreAsync();
         StopTrainerScan(); // le scan actif pénalise les liaisons déjà ouvertes (manettes, trainer)
 
-        Func<CancellationToken, Task<ITrainerLink>> factory;
-        GattRelayPolicy policy;
-        IReadOnlyDictionary<string, string>? txt = null;
-        string label, transport;
-
+        var (factory, policy, txt, label, transport) = DescribeEndpoint(endpoint);
         switch (endpoint)
         {
             case TrainerEndpoint.DirCon d:
-                label = d.Host; transport = "Wi-Fi (DirCon)"; txt = d.Txt;
-                policy = new GattRelayPolicy(full: true); // comportement validé sur KICKR
-                factory = async ct =>
-                {
-                    var c = new DirConClient();
-                    c.Log += m => Log?.Invoke($"[Trainer] {m}");
-                    try
-                    {
-                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                        timeout.CancelAfter(TimeSpan.FromSeconds(8));
-                        await c.ConnectAsync(d.Host, d.Port, timeout.Token);
-                    }
-                    catch { await c.DisposeAsync(); throw; }
-                    return c;
-                };
                 Config.TrainerTransport = "wifi"; Config.TrainerHost = d.Host; Config.TrainerPort = d.Port;
                 break;
-
             case TrainerEndpoint.Ble b:
-                label = b.Name; transport = "Bluetooth";
-                policy = new GattRelayPolicy(Config.FullRelay);
-                factory = async ct =>
-                {
-                    var l = new BleTrainerLink(_platform.Central, b.Address, b.Name);
-                    l.Log += m => Log?.Invoke($"[Trainer] {m}");
-                    try { await l.ConnectAsync(ct); }
-                    catch { await l.DisposeAsync(); throw; }
-                    return l;
-                };
                 Config.TrainerTransport = "ble"; Config.TrainerBleAddress = b.Address.ToSavedAddress(); Config.TrainerBleName = b.Name;
                 break;
-
-            default: throw new ArgumentException("Type de trainer inconnu.", nameof(endpoint));
         }
 
         var link = new ReconnectingTrainerLink(factory);
@@ -943,19 +1023,7 @@ public sealed class BridgeService : IAsyncDisposable
         {
             await link.ConnectAsync();
 
-            proxy = new DirConTrainerProxy(link, _vsModel, txt, policy: policy, trainerLabel: label, transportLabel: transport,
-                mdns: _mdns?.CreateAdvertiser())
-            {
-                Enabled = !Config.AppHandlesShifting, // l'appli gère les vitesses : relais pur
-                NativeZwiftMode = Config.NativeZwiftMode,
-                RiderWeightKg = Config.RiderWeightKg,
-                BikeWeightKg = Config.BikeWeightKg,
-                HeartRate = _hrSource,
-                LogWire = _verboseFrames,
-            };
-            proxy.Log += m => Log?.Invoke($"[Proxy trainer] {m}");
-            proxy.ClientsChanged += () => TrainerChanged?.Invoke();
-            proxy.NativeStateChanged += () => TrainerChanged?.Invoke();
+            proxy = CreateProxy(link, policy, txt, label, transport);
             await proxy.StartAsync();
 
             _vsModel.Gear = Gear.Gear;
@@ -1019,6 +1087,7 @@ public sealed class BridgeService : IAsyncDisposable
     public void InjectEvents(IReadOnlyList<ButtonEvent> events, object? source = null)
     {
         List<(ObcButtonId Id, byte State)> changes, toSend;
+        List<(ObcButtonId Id, int Param)> gearActions;
         long started = Environment.TickCount64, lockWait;
         lock (_dispatchLock)
         {
@@ -1034,6 +1103,17 @@ public sealed class BridgeService : IAsyncDisposable
             // même quand deux sources (deux manettes, clavier…) injectent en même temps.
             if (toSend.Count > 0)
                 foreach (var msg in ObcMessages.EncodeButtonState(toSend)) _outbox.Writer.TryWrite(msg);
+
+            // Répétitions arrêtées et démarrées sous le même verrou que la traduction : une répétition ne peut plus glisser
+            // un « appuyé » après le vrai relâchement (touche vue tenue par l'appli), ni démarrer pour une touche déjà relâchée.
+            foreach (var e in events)
+                if (!e.Pressed) StopRepeater(e.Button); // touche relâchée (ou manette coupée)
+            if (changes.Count > 0) StartRepeaters(events, changes, source);
+
+            // Paramètres lus dans le profil qui vient de traduire l'appui (et non dans un profil activé entre-temps).
+            gearActions = [];
+            foreach (var (id, state) in changes)
+                if (state == 1) gearActions.Add((id, GearParamFor(events, id)));
         }
 
         foreach (var e in events)
@@ -1045,7 +1125,6 @@ public sealed class BridgeService : IAsyncDisposable
             Log?.Invoke(ObcButtonCatalog.IsInternal(id)
                 ? $"→ ShiftBridge {id} {(state == 1 ? "appuyé" : "relâché")}"
                 : $"→ OBC {id} {(state == 1 ? "appuyé" : "relâché")}");
-        foreach (var e in events.Where(e => !e.Pressed)) StopRepeater(e.Button); // touche relâchée (ou manette coupée)
         if (changes.Count == 0)
         {
             if (events.Any(e => e.Pressed))
@@ -1054,11 +1133,11 @@ public sealed class BridgeService : IAsyncDisposable
         }
 
         // Rapport virtuel + retour haptique sur appui uniquement.
-        foreach (var (id, state) in changes.Where(c => c.State == 1))
-            ApplyGearAction(id, GearParamFor(events, id), source);
-        StartRepeaters(events, changes, source);
+        foreach (var (id, param) in gearActions)
+            ApplyGearAction(id, param, source);
 
-        if (ProxyShifts && changes.Any(c => c.Id is ObcButtonId.ShiftUp or ObcButtonId.ShiftDown or ObcButtonId.ShiftUpBy or ObcButtonId.ShiftDownBy))
+        // Une seule fois par appui (et pas au relâchement, qui n'applique rien).
+        if (ProxyShifts && gearActions.Any(c => c.Id is ObcButtonId.ShiftUp or ObcButtonId.ShiftDown or ObcButtonId.ShiftUpBy or ObcButtonId.ShiftDownBy))
             Log?.Invoke("Vitesse appliquée par le proxy trainer (non envoyée à l'appli).");
         LogSlowDispatch(started, lockWait);
     }
@@ -1152,14 +1231,15 @@ public sealed class BridgeService : IAsyncDisposable
     // ---------- Répétition sur appui long (vitesse + / −) ----------
 
     private readonly object _gearLock = new();
-    private readonly ConcurrentDictionary<ButtonKey, CancellationTokenSource> _repeaters = new();
+    /// <summary>Répétitions en cours, par touche. Modifié uniquement sous <c>_dispatchLock</c>.</summary>
+    private readonly Dictionary<ButtonKey, CancellationTokenSource> _repeaters = [];
 
     /// <summary>Délai minimal d'attente et d'intervalle de répétition (protège le trainer et l'appli d'une valeur absurde).</summary>
     private const int MinRepeatMs = 30;
 
     /// <summary>
     /// Démarre la répétition pour les touches qui viennent d'être appuyées, ont l'option « répéter » et déclenchent une vitesse.
-    /// Seules ShiftUp et ShiftDown se répètent : répéter « Menu » ou « Select » n'aurait aucun sens.
+    /// Seules ShiftUp et ShiftDown se répètent : répéter « Menu » ou « Select » n'aurait aucun sens. Appelé sous <c>_dispatchLock</c>.
     /// </summary>
     private void StartRepeaters(IReadOnlyList<ButtonEvent> events, List<(ObcButtonId Id, byte State)> changes, object? source)
     {
@@ -1178,9 +1258,12 @@ public sealed class BridgeService : IAsyncDisposable
         }
     }
 
+    /// <summary>Appelé sous <c>_dispatchLock</c>.</summary>
     private void StopRepeater(ButtonKey button)
     {
-        if (_repeaters.TryRemove(button, out var cts)) cts.Cancel();
+        if (!_repeaters.Remove(button, out var cts)) return;
+        cts.Cancel();
+        cts.Dispose();
     }
 
     private async Task RepeatLoopAsync(ObcButtonId action, int delayMs, int intervalMs, object? source, CancellationToken ct)
@@ -1190,7 +1273,7 @@ public sealed class BridgeService : IAsyncDisposable
             await Task.Delay(delayMs, ct);
             while (!ct.IsCancellationRequested)
             {
-                if (!RepeatShift(action, source)) return; // butée atteinte : inutile d'insister
+                if (!RepeatShift(action, source, ct)) return; // butée atteinte (ou touche relâchée) : inutile d'insister
                 await Task.Delay(intervalMs, ct);
             }
         }
@@ -1199,27 +1282,31 @@ public sealed class BridgeService : IAsyncDisposable
     }
 
     /// <summary>Une répétition : même effet qu'un nouvel appui (vitesse, retour haptique), sauf que la touche reste tenue.</summary>
-    private bool RepeatShift(ObcButtonId action, object? source)
+    private bool RepeatShift(ObcButtonId action, object? source, CancellationToken ct)
     {
         GearChange change;
         int before, after;
-        lock (_gearLock) { before = Gear.Gear; change = Gear.Apply(action); after = Gear.Gear; }
+        lock (_dispatchLock)
+        {
+            // Revérifié sous le verrou du flux des touches : si le relâchement est passé entre-temps, rien ne part.
+            if (ct.IsCancellationRequested) return false;
+            lock (_gearLock) { before = Gear.Gear; change = Gear.Apply(action); after = Gear.Gear; }
+
+            // Sans proxy, l'appli applique elle-même les vitesses : elle doit voir un nouvel appui. La touche est toujours tenue
+            // (état 1) : on envoie donc relâché puis appuyé, et le vrai relâchement partira avec la touche.
+            bool appSupportsIt = _mapping.SupportedActions is not { Count: > 0 } supported || supported.Contains(action);
+            if (change == GearChange.Changed && !ProxyShifts && appSupportsIt)
+            {
+                foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)0)])) _outbox.Writer.TryWrite(m);
+                foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)1)])) _outbox.Writer.TryWrite(m);
+            }
+        }
         Log?.Invoke($"Vitesse (répétition) : {action} {before}→{after} ({change})");
         LastGearChange = change;
         if (change != GearChange.None) GearChanged?.Invoke();
         if (change == GearChange.Changed) OnGearChanged();
         _ = BuzzAsync(change, source);
-        if (change != GearChange.Changed) return false;
-
-        // Sans proxy, l'appli applique elle-même les vitesses : elle doit voir un nouvel appui. La touche est toujours tenue
-        // (état 1) : on envoie donc relâché puis appuyé, et le vrai relâchement partira avec la touche.
-        bool appSupportsIt = _mapping.SupportedActions is not { Count: > 0 } supported || supported.Contains(action);
-        if (!ProxyShifts && appSupportsIt)
-        {
-            foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)0)])) _outbox.Writer.TryWrite(m);
-            foreach (var m in ObcMessages.EncodeButtonState([(action, (byte)1)])) _outbox.Writer.TryWrite(m);
-        }
-        return true;
+        return change == GearChange.Changed;
     }
 
     /// <summary>
@@ -1292,7 +1379,7 @@ public sealed class BridgeService : IAsyncDisposable
     {
         _disposed = true;
         Interlocked.Increment(ref _scanEval); // annule tout arrêt de scan différé
-        foreach (var button in _repeaters.Keys) StopRepeater(button);
+        lock (_dispatchLock) foreach (var button in _repeaters.Keys.ToArray()) StopRepeater(button);
         _localInput.ButtonEvents -= _localInputHandler;
         await _localInput.DisposeAsync();
         await StopTrainerProxyAsync();
@@ -1302,7 +1389,11 @@ public sealed class BridgeService : IAsyncDisposable
         _scanner.Dispose();
         Inspector.Dispose();
         _hub.Dispose();
-        foreach (var c in _controllers.Values) await c.DisposeAsync();
+        // En parallèle : l'arrêt de l'appli est borné (5 s) par les hôtes, une manette lente ne doit pas retenir les autres.
+        await Task.WhenAll(_controllers.Values.Select(async c =>
+        {
+            try { await c.DisposeAsync(); } catch (Exception ex) { Log?.Invoke($"Arrêt d'une manette incomplet : {ex.Message}"); }
+        }));
         _controllers.Clear();
         _outbox.Writer.TryComplete();
         await _sendLoop;

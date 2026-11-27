@@ -58,13 +58,16 @@ public sealed partial class MainViewModel : ObservableObject
         BuildButtonRows();
 
         _bridge.Log += m => OnUi(() => AppendLog(m));
-        _bridge.DevicesChanged += () => OnUi(RefreshDevices);
+        // Rafraîchissements regroupés : une rafale d'événements (batterie, vitesses en répétition rapide) = un seul rafraîchissement.
+        var devicesRefresh = new CoalescedRefresh(ui, RefreshDevices);
+        var trainerRefresh = new CoalescedRefresh(ui, RefreshTrainer);
+        _bridge.DevicesChanged += devicesRefresh.Request;
         _bridge.Inspector.DevicesChanged += () => OnUi(RefreshInspector);
         _bridge.Inspector.CaptureChanged += () => OnUi(RefreshInspector);
         _bridge.TransportsChanged += () => OnUi(RefreshTransportStatus);
         _bridge.ActiveProfileChanged += () => OnUi(() => { RefreshProfiles(); RefreshSummaries(); });
         _bridge.GearChanged += () => OnUi(RefreshGear);
-        _bridge.TrainerChanged += () => OnUi(RefreshTrainer);
+        _bridge.TrainerChanged += trainerRefresh.Request;
         _bridge.BleTrainersChanged += () => OnUi(RefreshBleTrainers);
         _bridge.HeartRateChanged += () => OnUi(RefreshHeartRate);
         _bridge.HeartRateSensorsChanged += () => OnUi(RefreshHeartRateSensors);
@@ -86,8 +89,8 @@ public sealed partial class MainViewModel : ObservableObject
         _overlayShowBar = _config.OverlayShowBar;
         _overlayFlash = _config.OverlayFlash;
         _overlayShowTelemetry = _config.OverlayShowTelemetry;
-        _riderWeightText = _config.RiderWeightKg.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        _bikeWeightText = _config.BikeWeightKg.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _riderWeightText = _config.RiderWeightKg.ToString(System.Globalization.CultureInfo.CurrentCulture);
+        _bikeWeightText = _config.BikeWeightKg.ToString(System.Globalization.CultureInfo.CurrentCulture);
         _gearCountValue = _bridge.Gear.GearCount;
         _gearCountText = Loc.Fmt(Strings.Trainer_GearCountValue, _bridge.Gear.GearCount);
         _chainringText = _bridge.Drivetrain.ChainringTeeth.ToString();
@@ -324,13 +327,13 @@ public sealed partial class MainViewModel : ObservableObject
 
         // Prochaine étape pour quelqu'un qui découvre l'application (bandeau de l'Accueil, masqué une fois tout en place).
         if (ControllersState != UiState.Ok)
-            SetNextStep(Strings.Step_1, "devices");
+            SetNextStep(Strings.Step_1, Pages.Devices);
         else if (!hasTrainer)
-            SetNextStep(Strings.Step_2Trainer, "trainer");
+            SetNextStep(Strings.Step_2Trainer, Pages.Trainer);
         else if (!_bridge.TrainerProxyActive)
-            SetNextStep(Strings.Step_2Enable, "trainer");
+            SetNextStep(Strings.Step_2Enable, Pages.Trainer);
         else if (AppState != UiState.Ok)
-            SetNextStep(Strings.Step_3, "apps");
+            SetNextStep(Strings.Step_3, Pages.Apps);
         else
             SetNextStep("", "");
 
@@ -402,7 +405,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         AppendLog($"ShiftBridge v{_host.AppVersion}");
         AutoReconnect = _config.AutoReconnect;
-        _bridge.AutoConnectKnown();
+        _bridge.AutoConnectKnown(); // idempotent : un nouvel essai après un échec ne double pas la reconnexion automatique
         await ApplyTransportsAsync();
         if ((EnableNetwork || EnableDirCon) && !_host.IsWifiOn) AppendLog(Strings.Log_NetworkNoWifi);
         StartScan();
@@ -441,11 +444,18 @@ public sealed partial class MainViewModel : ObservableObject
 
     public async Task StopAsync()
     {
+        if (Interlocked.Exchange(ref _stopped, 1) != 0) return;
         _config.AutoReconnect = AutoReconnect;
         SaveConfig();
         _updateCts.Cancel();
+        // Boucles et temporisations de l'interface : plus rien ne doit être posté vers une interface qui se ferme.
+        foreach (var cts in new[] { _telemetryCts, _hrLoopCts, _weightsCts, _drivetrainCts, _gearSaveCts, _gearCountCts, _opacitySaveCts })
+            cts?.Cancel();
         await _bridge.DisposeAsync();
+        if (LogFileWriter.Default is { } log) await log.CloseAsync(TimeSpan.FromSeconds(1));
     }
+
+    private int _stopped;
 
     // ---------- Appareils ----------
 
@@ -593,8 +603,7 @@ public sealed partial class MainViewModel : ObservableObject
             .OrderBy(d => d.Name).ThenBy(d => d.Address)
             .Select(d => new DeviceRowViewModel(d, controllers.GetValueOrDefault(d.Address), _bridge.CustomName(d.AddressText)))
             .ToList();
-        Devices.Clear();
-        foreach (var r in rows) Devices.Add(r);
+        ListMerge.Apply(Devices, rows, r => r.Device.Address, (a, b) => a.ShowsSameAs(b));
         // Un nouveau modèle de manette vient d'être connecté : ses touches (et leurs assignations par défaut) apparaissent,
         // et la config (modèle mémorisé) est enregistrée.
         if (AddControllerRows()) { ReloadRows(); SaveConfig(); }
@@ -734,12 +743,12 @@ public sealed partial class MainViewModel : ObservableObject
     {
         if (_loading) return;
         if (row.Selected is null || row.Selected.Id == ObcButtonId.None)
-            _editProfile.Bindings.Remove(row.Button);
+            _editProfile.RemoveBinding(row.Button);
         else
         {
             // Les délais par touche ne servent plus (la vitesse de répétition est globale) : on les conserve tels quels.
             var previous = _editProfile.Bindings.GetValueOrDefault(row.Button);
-            _editProfile.Bindings[row.Button] = new ButtonBinding
+            _editProfile.SetBinding(row.Button, new ButtonBinding
             {
                 Actions = [row.Selected.Id],
                 RepeatOnHold = row.RepeatOnHold && row.CanRepeat,
@@ -747,7 +756,7 @@ public sealed partial class MainViewModel : ObservableObject
                 RepeatIntervalMs = previous?.RepeatIntervalMs ?? 250,
                 GearTarget = row.CanTarget ? row.GearTarget : 0,
                 GearSteps = row.CanStep ? row.GearSteps : 0,
-            };
+            });
         }
         SaveConfig();
         _bridge.RefreshLocalInput(); // la liste des touches écoutées / avalées dépend des assignations
@@ -963,7 +972,7 @@ public sealed partial class MainViewModel : ObservableObject
     private void RemoveInputKey(ButtonRowViewModel? row)
     {
         if (row is not { CanRemove: true }) return;
-        _editProfile.Bindings.Remove(row.Button);
+        _editProfile.RemoveBinding(row.Button);
         RemoveRow(row);
         SaveConfig();
         _bridge.RefreshLocalInput();
@@ -983,6 +992,7 @@ public sealed partial class MainViewModel : ObservableObject
     {
         await _transportsGate.WaitAsync();
         try { await ApplyTransportsCoreAsync(); }
+        catch (Exception ex) { ReportError(Loc.Fmt(Strings.Log_TransportsFailed, ex.Message)); }
         finally { _transportsGate.Release(); }
     }
 
@@ -1102,15 +1112,29 @@ public sealed partial class MainViewModel : ObservableObject
     partial void OnAppHandlesShiftingChanged(bool value)
     {
         if (_loading) return;
-        _ = _bridge.SetAppHandlesShiftingAsync(value);
+        _ = ObserveAsync(_bridge.SetAppHandlesShiftingAsync(value), Strings.Log_ShiftingModeFailed);
         SaveConfig();
     }
 
     partial void OnNativeZwiftModeChanged(bool value)
     {
         if (_loading) return;
-        _ = _bridge.SetNativeZwiftModeAsync(value);
+        _ = ObserveAsync(_bridge.SetNativeZwiftModeAsync(value), Strings.Log_NativeModeFailed);
         SaveConfig();
+    }
+
+    /// <summary>
+    /// Attend une opération lancée depuis une case à cocher : une erreur (trainer injoignable…) est écrite au journal au lieu
+    /// d'être perdue, et l'état du trainer est rafraîchi pour refléter ce qui a réellement été appliqué.
+    /// </summary>
+    private async Task ObserveAsync(Task operation, string failureFormat)
+    {
+        try { await operation; }
+        catch (Exception ex)
+        {
+            ReportError(Loc.Fmt(failureFormat, ex.Message));
+            OnUi(RefreshTrainer);
+        }
     }
 
     partial void OnRiderWeightTextChanged(string value) => ApplyWeights();
@@ -1347,7 +1371,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (SelectedBleTrainer is not { } ble)
             {
                 SetTrainerMessage(Strings.Trainer_ChooseBle);
-                CurrentPage = "trainer"; // depuis l'Accueil, on emmène l'utilisateur là où il doit choisir
+                CurrentPage = Pages.Trainer; // depuis l'Accueil, on emmène l'utilisateur là où il doit choisir
                 return;
             }
             endpoint = new TrainerEndpoint.Ble(ble.Address, ble.Name);
@@ -1358,7 +1382,7 @@ public sealed partial class MainViewModel : ObservableObject
             if (string.IsNullOrWhiteSpace(TrainerHost) || !int.TryParse(TrainerPortText, out int port) || port is < 1 or > 65535)
             {
                 SetTrainerMessage(Strings.Trainer_ChooseWifi);
-                CurrentPage = "trainer";
+                CurrentPage = Pages.Trainer;
                 return;
             }
             // On reprend les attributs mDNS du vrai trainer (liste de services…) pour que l'appli nous reconnaisse comme lui.
@@ -1438,7 +1462,8 @@ public sealed partial class MainViewModel : ObservableObject
         // Mise à jour sur place : le capteur choisi (ou mémorisé) reste dans la liste même avant d'être revu.
         foreach (var s in seen)
         {
-            int i = FoundHeartRateSensors.ToList().FindIndex(x => x.Address == s.Address);
+            int i = -1;
+            for (int j = 0; j < FoundHeartRateSensors.Count; j++) if (FoundHeartRateSensors[j].Address == s.Address) { i = j; break; }
             if (i < 0) FoundHeartRateSensors.Add(s); else if (FoundHeartRateSensors[i] != s) FoundHeartRateSensors[i] = s;
         }
         if (selected is not null)
@@ -1693,7 +1718,7 @@ public sealed partial class MainViewModel : ObservableObject
         catch (OperationCanceledException) when (_updateCts.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            AppendLog($"Mise à jour : vérification impossible ({ex.Message})");
+            ReportError($"Mise à jour : vérification impossible ({ex.Message})"); // thread de fond : passe par l'interface
             if (manual) _ui.Post(() => UpdateStatus = Strings.Update_CheckFailed);
         }
         finally
@@ -1888,8 +1913,13 @@ public sealed partial class MainViewModel : ObservableObject
             : _bridge.AppHandlesShifting ? Strings.Overlay_AppShifts
             : _bridge.TrainerNativeActive ? Strings.Overlay_Native : "FTMS";
         OverlayGear = _bridge.Gear.Gear.ToString();
-        int current = _bridge.Gear.Gear;
-        OverlaySegments = [.. Enumerable.Range(1, _bridge.Gear.GearCount).Select(i => new GearSegment(i, i == current, i < current))];
+        int current = _bridge.Gear.Gear, count = _bridge.Gear.GearCount;
+        // Appelé plusieurs fois par changement de vitesse : la barre n'est recréée (et redessinée) que si elle a changé.
+        if ((current, count) != _overlaySegmentsFor)
+        {
+            _overlaySegmentsFor = (current, count);
+            OverlaySegments = [.. Enumerable.Range(1, count).Select(i => new GearSegment(i, i == current, i < current))];
+        }
         OverlayDetail = $"/ {_bridge.Gear.GearCount}  ·  {_bridge.GearRatio:0.00}  ·  {mode}";
         GearRatioText = Loc.Fmt(Strings.Gear_Ratio, _bridge.GearRatio);
         // Des phrases plutôt que « Natif / Compatible » : le premier mot ne dit rien à qui ne connaît pas les protocoles.
@@ -1898,6 +1928,8 @@ public sealed partial class MainViewModel : ObservableObject
             : _bridge.TrainerNativeActive ? Strings.Mode_ByTrainer : Strings.Mode_ByApp;
         IsGearApplied = _bridge.TrainerProxyActive && !_bridge.AppHandlesShifting;
     }
+
+    private (int Gear, int Count) _overlaySegmentsFor = (-1, -1);
 
     /// <summary>La vitesse affichée est réellement appliquée au trainer (virtual shifting actif).</summary>
     [ObservableProperty] private bool _isGearApplied;
@@ -1956,27 +1988,8 @@ public sealed partial class MainViewModel : ObservableObject
         _ = FlushLogLaterAsync();
     }
 
-    private static string? _logFilePath;
-    private static bool _logFileBroken;
-
-    /// <summary>Recopie le journal dans %APPDATA%\ShiftBridge\log.txt (tourne à ~1 Mo) pour diagnostiquer après coup.</summary>
-    private static void WriteLogFile(string line)
-    {
-        if (_logFileBroken) return;
-        try
-        {
-            if (_logFilePath is null)
-            {
-                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShiftBridge");
-                Directory.CreateDirectory(dir);
-                _logFilePath = Path.Combine(dir, "log.txt");
-                var fi = new FileInfo(_logFilePath);
-                if (fi.Exists && fi.Length > 1_000_000) File.Move(_logFilePath, _logFilePath + ".old", true);
-            }
-            File.AppendAllText(_logFilePath, line + Environment.NewLine);
-        }
-        catch { _logFileBroken = true; }
-    }
+    /// <summary>Recopie le journal dans %APPDATA%\ShiftBridge\log.txt (tâche de fond, tourne à 5 Mo) pour diagnostiquer après coup.</summary>
+    private static void WriteLogFile(string line) => LogFileWriter.Default?.Write(line);
 
     private async Task FlushLogLaterAsync()
     {
@@ -1990,7 +2003,7 @@ public sealed partial class MainViewModel : ObservableObject
 
     private void RefreshLogText()
     {
-        if (!_logStale || CurrentPage != "diagnostic") return; // sinon : reconstruit à l'ouverture de la page
+        if (!_logStale || CurrentPage != Pages.Diagnostic) return; // sinon : reconstruit à l'ouverture de la page
         _logStale = false;
         LogText = string.Join(Environment.NewLine, _logLines);
     }
@@ -2009,4 +2022,23 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private void OnUi(Action a) => _ui.Post(a);
+
+    /// <summary>
+    /// Poste un rafraîchissement sur le thread UI, sauf s'il y est déjà en attente : il s'exécutera une fois, avec l'état le
+    /// plus récent, quel que soit le nombre de demandes reçues entre-temps.
+    /// </summary>
+    private sealed class CoalescedRefresh(IUiDispatcher ui, Action refresh)
+    {
+        private int _pending;
+
+        public void Request()
+        {
+            if (Interlocked.Exchange(ref _pending, 1) != 0) return;
+            ui.Post(() =>
+            {
+                Interlocked.Exchange(ref _pending, 0);
+                refresh();
+            });
+        }
+    }
 }

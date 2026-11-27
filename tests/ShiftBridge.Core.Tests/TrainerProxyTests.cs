@@ -568,6 +568,30 @@ public class TrainerProxyTests
     }
 
     [Fact]
+    public async Task Measure_works_with_bike_data_split_over_two_notifications()
+    {
+        // Trainer qui répartit Indoor Bike Data (bit « More Data ») : cadence et puissance d'un côté, vitesse de l'autre.
+        await using var trainer = new FakeTrainer();
+        var (up, proxy, app) = await SetupAsync(trainer, new VirtualShiftingModel());
+        await using var _1 = up; await using var _2 = proxy; await using var _3 = app;
+
+        var measure = proxy.MeasureRealRatioAsync(TimeSpan.FromSeconds(8));
+        int speedRaw = (int)Math.Round(2.43 * 90 / 60.0 * 2.105 * 3.6 * 100); // 0,01 km/h
+        for (int i = 0; i < 40 && !measure.IsCompleted; i++)
+        {
+            await trainer.PushRawBikeDataAsync([0x45, 0x00, 180, 0x00, 0xC8, 0x00]);                         // cadence 90, 200 W
+            await trainer.PushRawBikeDataAsync([0x00, 0x00, (byte)(speedRaw & 0xFF), (byte)(speedRaw >> 8)]); // vitesse seule
+            await Task.Delay(30);
+        }
+        var result = await measure;
+        Assert.True(result.Success, result.Message);
+        Assert.InRange(result.Ratio / 2.43, 0.98, 1.02);
+        // Les paquets sans puissance ne font plus clignoter la puissance affichée.
+        Assert.Equal(200, proxy.LastPowerW);
+        Assert.Equal(90, proxy.LastCadenceRpm);
+    }
+
+    [Fact]
     public async Task Measure_explains_why_it_failed()
     {
         await using var trainer = new FakeTrainer();

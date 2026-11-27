@@ -12,6 +12,7 @@ internal sealed class XInputPoller : IDisposable
 {
     private const int Slots = 4;
     private const long ProbeEveryMs = 2000;
+    private const int ActivePollMs = 8, IdlePollMs = 250;
 
     private readonly InputAggregator _aggregator;
     private readonly Action<List<ButtonEvent>> _enqueue;
@@ -39,7 +40,9 @@ internal sealed class XInputPoller : IDisposable
         var mappers = Enumerable.Range(0, Slots).Select(_ => new XInputMapper()).ToArray();
         var lastPacket = new uint[Slots];
         var nextProbe = new long[Slots];
-        Native.timeBeginPeriod(1);
+        // Résolution du minuteur à 1 ms (coûteuse en énergie pour tout le système) seulement quand une manette est branchée ;
+        // sans manette, un tour toutes les 250 ms suffit à en détecter une nouvelle.
+        bool highRes = false;
         try
         {
             while (!ct.IsCancellationRequested)
@@ -84,14 +87,21 @@ internal sealed class XInputPoller : IDisposable
                         }
                     }
                 }
-                await Task.Delay(8, ct);
+                bool any;
+                lock (_connected) any = Array.IndexOf(_connected, true) >= 0;
+                if (any != highRes)
+                {
+                    if (any) Native.timeBeginPeriod(1); else Native.timeEndPeriod(1);
+                    highRes = any;
+                }
+                await Task.Delay(any ? ActivePollMs : IdlePollMs, ct);
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { _log($"Lecture XInput interrompue : {ex.Message}"); }
         finally
         {
-            Native.timeEndPeriod(1);
+            if (highRes) Native.timeEndPeriod(1);
             for (int i = 0; i < Slots; i++)
             {
                 var events = _aggregator.RemoveSource($"xinput{i}");

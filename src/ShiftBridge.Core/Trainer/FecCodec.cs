@@ -98,6 +98,21 @@ public static class FecCodec
         return true;
     }
 
+    /// <summary>
+    /// Page 0x37 (configuration du cycliste) : poids du cycliste (0,01 kg, octets 1-2 de la page) et du vélo (12 bits en
+    /// 0,05 kg : quartet haut de l'octet 4 et octet 5). Les valeurs « invalides » de la norme donnent null.
+    /// </summary>
+    public static bool TryParseUserConfig(ReadOnlySpan<byte> message, out double? riderKg, out double? bikeKg)
+    {
+        riderKg = null; bikeKg = null;
+        if (message.Length < MessageLength || message[4] != PageUserConfiguration) return false;
+        int rider = message[5] | (message[6] << 8);
+        if (rider != 0xFFFF && rider > 0) riderKg = rider * 0.01;
+        int bike = (message[8] >> 4) | (message[9] << 4);
+        if (bike != 0xFFF && bike > 0) bikeKg = bike * 0.05;
+        return true;
+    }
+
     // ---------- Pages 0x10 et 0x19 : mesures ----------
 
     /// <summary>Vitesse de la page 0x10 (0,001 m/s ; 0xFFFF = invalide).</summary>

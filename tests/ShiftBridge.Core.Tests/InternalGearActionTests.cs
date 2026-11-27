@@ -27,8 +27,9 @@ public class InternalGearActionTests
     [Theory]
     [InlineData(20, 20)]
     [InlineData(99, 24)]
-    [InlineData(0, 1)]
-    [InlineData(-5, 1)]
+    [InlineData(1, 1)]
+    [InlineData(0, 12)]  // cible non réglée : on ne bouge pas (avant 0.25.2 : saut au rapport 1)
+    [InlineData(-5, 12)]
     public void Go_to_gear_is_bounded_to_the_scale(int target, int expected)
     {
         var gears = new VirtualGearState(24, 12);

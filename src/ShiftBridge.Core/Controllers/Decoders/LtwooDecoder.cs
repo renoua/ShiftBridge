@@ -43,9 +43,10 @@ public sealed class LtwooDecoder : IButtonDecoder, IPollingDecoder
     public DecodedFrame? Decode(Guid characteristic, byte[] data)
     {
         if (data.Length < 11 || data[0] != ReplyHeader) return null;
-        for (int i = 1; i + 2 < data.Length; i++)
-            if (data[i] == 0xEE && data[i + 1] == 0xEE && data[i + 2] == 0xEE)
-                throw new InvalidOperationException("code PIN refusé par le groupe");
+        // Le groupe renvoie EE EE EE à la place du code PIN (octets 1 à 3) quand il le refuse. Chercher ce motif ailleurs
+        // (données, somme) pouvait signaler à tort un mauvais code.
+        if (data[1] == 0xEE && data[2] == 0xEE && data[3] == 0xEE)
+            throw new InvalidOperationException("code PIN refusé par le groupe");
         byte xor = 0;
         foreach (var b in data) xor ^= b;
         if (xor != 0) return null;

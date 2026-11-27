@@ -92,13 +92,21 @@ public sealed class DirConClient : ITrainerLink
             _pending[((byte)id, seq)] = tcs;
         }
 
-        await _writeLock.WaitAsync();
-        try { await _stream.WriteAsync(new DirConPacket((byte)id, seq, 0, payload).Encode()); }
-        finally { _writeLock.Release(); }
-
+        // Un seul délai pour toute la requête (attente du tour d'écriture, écriture, réponse) ; l'entrée en attente est
+        // retirée quoi qu'il arrive, même si l'écriture échoue.
         using var timeout = new CancellationTokenSource(RequestTimeout);
         try
         {
+            await _writeLock.WaitAsync(timeout.Token);
+            try { await _stream.WriteAsync(new DirConPacket((byte)id, seq, 0, payload).Encode(), timeout.Token); }
+            catch (OperationCanceledException)
+            {
+                // Écriture interrompue au milieu d'un paquet : le flux n'est plus fiable, la liaison est coupée (reconnexion).
+                try { _tcp.Dispose(); } catch { }
+                throw;
+            }
+            finally { _writeLock.Release(); }
+
             var response = await tcs.Task.WaitAsync(timeout.Token);
             if (response.ResponseCode != DirConResponse.Success)
                 throw new DirConException(Loc.Fmt(Strings.Err_DirConRefused, id, response.ResponseCode), response.ResponseCode);
@@ -137,7 +145,9 @@ public sealed class DirConClient : ITrainerLink
     {
         if (p.Id == (byte)DirConId.Notification && p.Payload.Length >= 16)
         {
-            Notification?.Invoke(DirConPacket.ReadUuid(p.Payload), p.Payload[16..]);
+            // Une erreur d'un abonné ne doit pas couper la liaison au trainer (elle terminait la boucle de lecture).
+            try { Notification?.Invoke(DirConPacket.ReadUuid(p.Payload), p.Payload[16..]); }
+            catch (Exception ex) { Log?.Invoke($"DirCon : traitement d'une notification en échec ({ex.Message})"); }
             return;
         }
         TaskCompletionSource<DirConPacket>? tcs;

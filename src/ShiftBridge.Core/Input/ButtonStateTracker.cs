@@ -12,8 +12,12 @@ public sealed class ButtonStateTracker
 
     public IReadOnlyCollection<ButtonKey> Current => _current;
 
+    private static readonly List<ButtonEvent> NoEvents = [];
+
+    /// <returns>Les changements ; une liste vide PARTAGÉE (à ne pas modifier) quand rien n'a changé, le cas de presque toutes les trames.</returns>
     public List<ButtonEvent> Update(IReadOnlySet<ButtonKey> pressedNow)
     {
+        if (pressedNow.Count == _current.Count && _current.SetEquals(pressedNow)) return NoEvents; // trame identique : aucun tri, aucune copie
         var events = new List<ButtonEvent>();
         foreach (var b in _current)
             if (!pressedNow.Contains(b)) events.Add(new ButtonEvent(b, false));
@@ -24,8 +28,19 @@ public sealed class ButtonStateTracker
     }
 
     /// <summary>Variante pour les manettes Zwift, dont les trames décodées sont des <see cref="PhysicalButton"/>.</summary>
-    public List<ButtonEvent> Update(IReadOnlySet<PhysicalButton> pressedNow) =>
-        Update(pressedNow.Select(b => (ButtonKey)b).ToHashSet());
+    public List<ButtonEvent> Update(IReadOnlySet<PhysicalButton> pressedNow)
+    {
+        // Trames au repos ou touche tenue (~30 par seconde) : comparées sans rien allouer.
+        if (pressedNow.Count == _current.Count)
+        {
+            bool same = true;
+            foreach (var b in pressedNow) if (!_current.Contains(b)) { same = false; break; }
+            if (same) return NoEvents;
+        }
+        var keys = new HashSet<ButtonKey>(pressedNow.Count);
+        foreach (var b in pressedNow) keys.Add(b);
+        return Update(keys);
+    }
 
     public List<ButtonEvent> Reset() => Update(new HashSet<ButtonKey>());
 }

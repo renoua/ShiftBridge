@@ -28,7 +28,8 @@ public sealed class ZwiftTrainerChannel : IAsyncDisposable
     private bool _simActive;
     private bool _sawRidingData;
     private int _failedRaised;
-    private bool _disposed;
+    private volatile bool _disposed;
+    private long _lastOtherReplyLogTick;
 
     // Changements de rapport en rafale (voir SendGearAsync) et rapports en attente de confirmation du trainer (FIFO).
     private double? _pendingGear;
@@ -106,6 +107,8 @@ public sealed class ZwiftTrainerChannel : IAsyncDisposable
 
     private async Task<bool> OpenSessionAsync(CancellationToken ct)
     {
+        // Canal libéré pendant une reconnexion : il ne doit pas se rabonner à la liaison (il recevrait encore les trames).
+        if (_disposed) return false;
         _link.Notification -= OnNotification;
         _link.Notification += OnNotification; // posé AVANT d'activer les abonnements : aucune réponse perdue
 
@@ -147,6 +150,7 @@ public sealed class ZwiftTrainerChannel : IAsyncDisposable
         catch (Exception ex) { Log?.Invoke($"Initialisation du canal Zwift interrompue : {ex.Message}"); return false; }
 
         lock (_lock) { _lastFullSim = sim; }
+        if (_disposed) { _link.Notification -= OnNotification; return false; }
         IsActive = true;
         _failedRaised = 0;
         Log?.Invoke($"Canal Zwift actif (rapport {_gearRatio:0.00}, coureur {_riderKg:0.#} kg, vélo {_bikeKg:0.#} kg).");
@@ -300,7 +304,16 @@ public sealed class ZwiftTrainerChannel : IAsyncDisposable
                     : $"Le trainer a retenu le rapport {confirmed:0.00} alors que {asked:0.00} était demandé (borné ou ignoré ?).");
                 GearConfirmed?.Invoke(confirmed);
             }
-            else Log?.Invoke($"Réponse du trainer (canal Zwift) : {Convert.ToHexString(value)}"); // infos, accusés…
+            else
+            {
+                // Infos, accusés… : utiles au diagnostic mais réguliers ; au plus une ligne par seconde.
+                long now = Environment.TickCount64;
+                if (now - Interlocked.Read(ref _lastOtherReplyLogTick) >= 1000)
+                {
+                    Interlocked.Exchange(ref _lastOtherReplyLogTick, now);
+                    Log?.Invoke($"Réponse du trainer (canal Zwift) : {Convert.ToHexString(value)}");
+                }
+            }
         }
         else if (ch == ZwiftConstants.AsyncCharacteristic && ZwiftTrainerCodec.TryDecodeRidingData(value, out var ride))
         {

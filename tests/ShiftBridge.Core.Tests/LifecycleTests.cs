@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using ShiftBridge.Core.Config;
+using ShiftBridge.Core.Controllers;
 using ShiftBridge.Core.Input;
 using ShiftBridge.Core.Mapping;
 using ShiftBridge.Core.Obc;
@@ -390,9 +391,79 @@ public class LifecycleTests
             File.WriteAllText(path, "{ ceci n'est pas du json");
             var c = ConfigStore.Load(path);
             Assert.Equal(24, c.GearCount);
-            Assert.True(File.Exists(path + ".bad"));
+            Assert.False(File.Exists(path));
+            Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path) + ".bad-*"));
         }
-        finally { File.Delete(path); File.Delete(path + ".bad"); }
+        finally
+        {
+            File.Delete(path);
+            foreach (var f in Directory.GetFiles(Path.GetDirectoryName(path)!, Path.GetFileName(path) + ".bad-*")) File.Delete(f);
+        }
+    }
+
+    [Fact]
+    public void Unknown_enum_values_are_dropped_without_resetting_the_config()
+    {
+        // Config écrite par une version plus récente : une action et un modèle de manette inconnus.
+        string path = Path.Combine(Path.GetTempPath(), $"shiftbridge-test-{Guid.NewGuid():N}.json");
+        try
+        {
+            File.WriteAllText(path, """
+                {
+                  "GearCount": 18,
+                  "SramAxsKeys": { "AA:BB": "secret" },
+                  "KnownControllerKinds": { "AA:BB": "FutureRemote", "CC:DD": "SramAxs" },
+                  "Profile": { "Name": "Mien", "Bindings": {
+                    "RightShiftUp": { "Actions": [ "ShiftUp" ] },
+                    "RightShiftDown": { "Actions": [ "SomeFutureAction" ] },
+                    "RightA": { "Actions": [ "SomeFutureAction", "Select" ] } } }
+                }
+                """);
+            var c = ConfigStore.Load(path);
+            Assert.Equal(18, c.GearCount);
+            Assert.Equal("secret", c.SramAxsKeys["AA:BB"]);
+            Assert.Equal(ControllerKind.SramAxs, Assert.Single(c.KnownControllerKinds).Value);
+            Assert.Equal("Mien", c.Profile.Name);
+            Assert.Equal([ObcButtonId.ShiftUp], c.Profile.Bindings[PhysicalButton.RightShiftUp].Actions);
+            Assert.False(c.Profile.Bindings.ContainsKey(PhysicalButton.RightShiftDown));
+            Assert.Equal([ObcButtonId.Select], c.Profile.Bindings[PhysicalButton.RightA].Actions);
+            Assert.True(File.Exists(path)); // pas mis de côté
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Locked_config_file_is_not_set_aside()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"shiftbridge-test-{Guid.NewGuid():N}.json");
+        try
+        {
+            ConfigStore.Save(new AppConfig { GearCount = 12 }, path);
+            AppConfig c;
+            using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) c = ConfigStore.Load(path);
+            Assert.Equal(24, c.GearCount); // défauts pour cette fois…
+            Assert.Equal(12, ConfigStore.Load(path).GearCount); // …mais le fichier est intact
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Fact]
+    public void Saved_config_round_trips_enum_names()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"shiftbridge-test-{Guid.NewGuid():N}.json");
+        try
+        {
+            var config = new AppConfig { RepeatSpeed = RepeatSpeed.Slow };
+            config.KnownControllerKinds["AA"] = ControllerKind.ShimanoDi2;
+            ConfigStore.Save(config, path);
+            string json = File.ReadAllText(path);
+            Assert.Contains("\"ShimanoDi2\"", json);
+            Assert.Contains("\"ShiftUp\"", json);
+            var back = ConfigStore.Load(path);
+            Assert.Equal(RepeatSpeed.Slow, back.RepeatSpeed);
+            Assert.Equal(ControllerKind.ShimanoDi2, back.KnownControllerKinds["AA"]);
+        }
+        finally { File.Delete(path); }
     }
 
     [Fact]

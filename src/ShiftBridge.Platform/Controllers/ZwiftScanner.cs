@@ -1,4 +1,5 @@
 using ShiftBridge.Core.Controllers;
+using ShiftBridge.Core.Trainer;
 using ShiftBridge.Core.Zwift;
 using ShiftBridge.Platform.Ble;
 
@@ -49,6 +50,9 @@ public sealed class ZwiftScanner(BleAdvertisementHub hub) : IDisposable
         {
             if (companyId != ZwiftConstants.ManufacturerId) continue;
             var type = ZwiftDeviceType.FromManufacturerData(data);
+            // Modèle inconnu qui s'annonce comme un trainer (Zwift Hub, autre appareil de la marque) : ce n'est pas une manette,
+            // lui écrire le handshake des manettes n'aurait pas de sens. Il reste proposé dans la liste des trainers.
+            if (type.Model == ZwiftModel.Unknown && LooksLikeTrainer(adv)) continue;
             string baseName = string.IsNullOrWhiteSpace(adv.LocalName) ? $"Zwift {type.Model}" : adv.LocalName;
             // Deux manettes du même modèle (gauche/droite) doivent être distinguables dans le journal.
             string side = type.Side switch { ZwiftSide.Left => "G", ZwiftSide.Right => "D", _ => "" };
@@ -56,6 +60,9 @@ public sealed class ZwiftScanner(BleAdvertisementHub hub) : IDisposable
             yield return new DiscoveredZwiftDevice(adv.Address, name, type, adv.Rssi, data);
         }
     }
+
+    private static bool LooksLikeTrainer(BleAdvertisement adv) =>
+        adv.ServiceUuids.Contains(FtmsCodec.FitnessMachineService) || adv.ServiceUuids.Contains(FtmsCodec.BaseUuid(0x1818));
 
     public void Dispose() => Stop();
 }

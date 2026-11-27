@@ -122,8 +122,9 @@ public sealed class ZwiftController : IController
                 SetState(ControllerState.Error);
             }
 
-            ReleaseAllButtons();
+            // Liaison fermée D'ABORD : une trame arrivée entre les deux ne peut plus remettre une touche enfoncée.
             await CleanupAsync();
+            ReleaseAllButtons();
             if (!AutoReconnect || ct.IsCancellationRequested) break;
             if (State != ControllerState.Locked) SetState(ControllerState.Disconnected);
 
@@ -173,12 +174,27 @@ public sealed class ZwiftController : IController
         await _connection.SetNotifyAsync(_service, ZwiftConstants.AsyncCharacteristic, BleNotifyMode.Notify);
         await _connection.SetNotifyAsync(_service, ZwiftConstants.SyncTxCharacteristic, BleNotifyMode.Indicate);
 
+        Interlocked.Exchange(ref _rideOnReplied, 0);
         await WriteAsync(ZwiftConstants.RideOn, withResponse: false);
         Log?.Invoke($"{Info.Name} : handshake RideOn envoyé");
+        _ = ReportRideOnReplyAsync(ct);
 
         _ = ReadBatteryAsync(); // best-effort
         SetState(ControllerState.Connected);
         return true;
+    }
+
+    private int _rideOnReplied;
+
+    /// <summary>
+    /// Diagnostic seulement (l'état ne change pas) : la manette répond-elle au handshake ? Sert à valider le protocole sur
+    /// du matériel réel, quand une manette se connecte mais n'envoie aucun bouton.
+    /// </summary>
+    private async Task ReportRideOnReplyAsync(CancellationToken ct)
+    {
+        try { await Task.Delay(2000, ct); } catch (OperationCanceledException) { return; }
+        if (Volatile.Read(ref _rideOnReplied) == 0 && State == ControllerState.Connected)
+            Log?.Invoke($"{Info.Name} : aucune réponse au handshake RideOn en 2 s (les boutons peuvent tout de même fonctionner).");
     }
 
     /// <summary>Batterie (0x180F) et version du micrologiciel (0x180A), lues une fois par connexion, au mieux.</summary>
@@ -215,14 +231,21 @@ public sealed class ZwiftController : IController
     private void OnValueChanged(Guid service, Guid characteristic, byte[] data)
     {
         _lastFrameTick = Environment.TickCount64;
-        string hex = Convert.ToHexString(data);
+        // Chaîne hexadécimale construite seulement quand elle est journalisée (les trames arrivent à ~30 Hz même au repos).
+        string Hex() => Convert.ToHexString(data);
+
+        if (ZwiftTrainerCodec.IsRideOnReply(data))
+        {
+            if (Interlocked.Exchange(ref _rideOnReplied, 1) == 0) Log?.Invoke($"{Info.Name} : réponse au handshake reçue ({Hex()})");
+            return;
+        }
 
         // Trame d'état Click v2 (FF 05 00 EA|FA 05 …, suivie du numéro de série) : réponse au handshake, PAS un verrouillage
         // (journal réel : elle suit chaque RideOn, la manette continue d'envoyer ses boutons). Le verrouillage se détecte
         // à l'absence du service Zwift (ConnectOnceAsync).
         if (data.Length >= 5 && data[0] == 0xFF && data[1] == 0x05 && data[2] == 0x00 && (data[3] is 0xEA or 0xFA) && data[4] == 0x05)
         {
-            Frame?.Invoke($"{Info.Name} < {hex}");
+            Frame?.Invoke($"{Info.Name} < {Hex()}");
             if (!_statusFrameLogged)
             {
                 _statusFrameLogged = true;
@@ -241,7 +264,7 @@ public sealed class ZwiftController : IController
         bool firstButtonFrame = isButtonFrame && _buttonFrameCount == 0;
         if (isButtonFrame) _buttonFrameCount++;
         if (VerboseFrames || !isButtonFrame || firstButtonFrame || events is { Count: > 0 })
-            Frame?.Invoke($"{Info.Name} < {hex}");
+            Frame?.Invoke($"{Info.Name} < {Hex()}");
 
         // Preuve de vie : un résumé toutes les 15 s, déclenché par les trames elles-mêmes (pas de timer).
         long now = Environment.TickCount64;
@@ -299,6 +322,7 @@ public sealed class ZwiftController : IController
 
     private void SetBattery(int pct)
     {
+        if (pct is < 0 or > 100) return; // 0xFF = inconnu chez certains firmwares : ignoré, comme par les sorties OBC
         BatteryPercent = pct;
         BatteryChanged?.Invoke(pct);
     }

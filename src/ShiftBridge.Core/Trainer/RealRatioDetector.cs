@@ -21,6 +21,8 @@ public sealed class RealRatioDetector
     private const double MinConsistentShare = 0.70;
 
     private readonly double _wheelMetres;
+    /// <summary>Les échantillons arrivent sur le fil des notifications du trainer, le résultat est lu depuis un autre thread.</summary>
+    private readonly object _lock = new();
     private readonly List<double> _raws = [];
     private readonly List<double> _window = [];
     private readonly List<double> _filtered = [];
@@ -41,11 +43,19 @@ public sealed class RealRatioDetector
 
     public void Reset()
     {
-        _window.Clear(); _filtered.Clear(); _raws.Clear();
-        _strikes = 0; TotalSamples = AcceptedSamples = 0; SawCadence = false; LastRpm = 0;
+        lock (_lock)
+        {
+            _window.Clear(); _filtered.Clear(); _raws.Clear();
+            _strikes = 0; TotalSamples = AcceptedSamples = 0; SawCadence = false; LastRpm = 0;
+        }
     }
 
     public void AddSample(double speedMs, double cadenceRpm)
+    {
+        lock (_lock) AddSampleCore(speedMs, cadenceRpm);
+    }
+
+    private void AddSampleCore(double speedMs, double cadenceRpm)
     {
         TotalSamples++;
         if (cadenceRpm > 0) SawCadence = true;
@@ -78,6 +88,11 @@ public sealed class RealRatioDetector
     /// <summary>Résultat si la mesure est assez longue et stable.</summary>
     public bool TryGetResult(out double ratio, out int samples, out double spread)
     {
+        lock (_lock) return TryGetResultCore(out ratio, out samples, out spread);
+    }
+
+    private bool TryGetResultCore(out double ratio, out int samples, out double spread)
+    {
         ratio = 0; spread = 1; samples = AcceptedSamples;
         if (AcceptedSamples < MinAccepted || _filtered.Count < 3) return false;
 
@@ -102,9 +117,12 @@ public sealed class RealRatioDetector
     {
         get
         {
-            if (_filtered.Count < 3) return 1;
-            TryGetResult(out _, out _, out var s);
-            return s;
+            lock (_lock)
+            {
+                if (_filtered.Count < 3) return 1;
+                TryGetResultCore(out _, out _, out var s);
+                return s;
+            }
         }
     }
 

@@ -27,7 +27,7 @@ public partial class App : Application
         if (!first && e.Args.Contains("--after-update", StringComparer.OrdinalIgnoreCase))
         {
             // Relancé par la mise à jour : l'ancienne instance finit de se fermer, on attend qu'elle libère l'instance unique.
-            try { first = _singleInstance.WaitOne(TimeSpan.FromSeconds(15)); }
+            try { first = _singleInstance.WaitOne(TimeSpan.FromSeconds(30)); } // l'arrêt peut prendre 5 s, plus la libération du Bluetooth
             catch (AbandonedMutexException) { first = true; } // l'ancienne instance s'est arrêtée sans libérer : le mutex nous appartient
         }
         if (first) Updates.GitHubUpdater.CleanupOld();

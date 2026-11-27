@@ -81,24 +81,55 @@ public sealed record DirConPacket(byte Id, byte Sequence, byte ResponseCode, byt
         new((byte)DirConId.Notification, 0, DirConResponse.Success, [.. UuidBytes(ch), .. value]);
 }
 
-/// <summary>Découpe le flux TCP DirCon en paquets complets (l'en-tête donne la longueur).</summary>
+/// <summary>
+/// Découpe le flux TCP DirCon en paquets complets (l'en-tête donne la longueur). Tampon unique réutilisé (plus de copie de
+/// tout le reste à chaque paquet) ; une longueur aberrante (flux corrompu) n'est plus attendue indéfiniment : elle déclenche
+/// une resynchronisation, comme une version inconnue.
+/// </summary>
 public sealed class DirConStreamParser
 {
-    private readonly List<byte> _buffer = [];
+    /// <summary>Charge utile maximale acceptée (la plus longue réponse réelle, la liste des caractéristiques, fait quelques centaines d'octets).</summary>
+    public const int MaxPayload = 4096;
+
+    private byte[] _buffer = new byte[1024];
+    private int _start, _count;
 
     public IEnumerable<DirConPacket> Feed(ReadOnlySpan<byte> data)
     {
-        _buffer.AddRange(data.ToArray());
+        Append(data);
         var packets = new List<DirConPacket>();
-        while (_buffer.Count >= DirConPacket.HeaderSize)
+        while (_count >= DirConPacket.HeaderSize)
         {
-            if (_buffer[0] != 1) { _buffer.RemoveAt(0); continue; } // version inconnue : resynchronisation
-            int len = (_buffer[4] << 8) | _buffer[5];
-            if (_buffer.Count < DirConPacket.HeaderSize + len) break;
-            packets.Add(new DirConPacket(_buffer[1], _buffer[2], _buffer[3],
-                _buffer.GetRange(DirConPacket.HeaderSize, len).ToArray()));
-            _buffer.RemoveRange(0, DirConPacket.HeaderSize + len);
+            var b = _buffer.AsSpan(_start, _count);
+            int len = (b[4] << 8) | b[5];
+            if (b[0] != 1 || len > MaxPayload)
+            {
+                // Version inconnue ou longueur impossible : on avance jusqu'au prochain octet de version plausible.
+                int next = b[1..].IndexOf((byte)1);
+                int skip = next < 0 ? _count : next + 1;
+                _start += skip; _count -= skip;
+                continue;
+            }
+            if (_count < DirConPacket.HeaderSize + len) break;
+            packets.Add(new DirConPacket(b[1], b[2], b[3], b.Slice(DirConPacket.HeaderSize, len).ToArray()));
+            _start += DirConPacket.HeaderSize + len;
+            _count -= DirConPacket.HeaderSize + len;
         }
+        if (_count == 0) _start = 0;
         return packets;
+    }
+
+    private void Append(ReadOnlySpan<byte> data)
+    {
+        if (_start + _count + data.Length > _buffer.Length)
+        {
+            // Compacte d'abord, n'agrandit que si nécessaire.
+            if (_count + data.Length > _buffer.Length)
+                Array.Resize(ref _buffer, Math.Max(_buffer.Length * 2, _count + data.Length));
+            Buffer.BlockCopy(_buffer, _start, _buffer, 0, _count);
+            _start = 0;
+        }
+        data.CopyTo(_buffer.AsSpan(_start + _count));
+        _count += data.Length;
     }
 }

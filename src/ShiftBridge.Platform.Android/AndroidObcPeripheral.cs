@@ -23,7 +23,13 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
     private readonly object _lock = new();
     private readonly Dictionary<string, BluetoothDevice> _buttonSubscribers = [];
     private readonly Dictionary<string, BluetoothDevice> _batterySubscribers = [];
-    private readonly Dictionary<string, ObcStreamParser> _parsers = [];
+    private readonly ObcAppInfoReassembler _appInfo = new();
+    /// <summary>Écritures longues (« prepared writes ») en cours, par client : fragments placés à leur offset, appliqués à l'Execute Write.</summary>
+    private readonly Dictionary<string, (Guid Characteristic, byte[] Data)> _preparedWrites = [];
+    /// <summary>Notifications restées sans accusé, par client : au-delà de <see cref="MaxMissedNotifications"/>, le client est considéré parti.</summary>
+    private readonly Dictionary<string, int> _missedNotifications = [];
+    private const int MaxMissedNotifications = 5;
+    private static readonly TimeSpan NotificationAckTimeout = TimeSpan.FromMilliseconds(150);
     private readonly SemaphoreSlim _notifyGate = new(1, 1);
     private ServerCallback? _callback;
     private BluetoothGattServer? _server;
@@ -121,12 +127,26 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
             .Build()!;
         var scanResponse = new AdvertiseData.Builder()!.SetIncludeDeviceName(true)!.Build()!;
 
+        var failure = await TryStartAdvertisingAsync(settings, data, scanResponse, ct);
+        if (failure == AdvertiseFailure.DataTooLarge)
+        {
+            // Nom du téléphone trop long pour la réponse de scan (29 octets) : Android ne le tronque pas, il refuse tout.
+            // On annonce alors sans nom : l'appli voit le service OBC, sous un nom générique.
+            Log?.Invoke("OBC BLE : nom du téléphone trop long pour l'annonce, annonce sans nom.");
+            failure = await TryStartAdvertisingAsync(settings, data, new AdvertiseData.Builder()!.Build()!, ct);
+        }
+        if (failure is { } f) throw new IOException(Loc.Fmt(Strings.Err_AdvRefused, f));
+    }
+
+    /// <returns>null si l'annonce a démarré, sinon le code d'échec d'Android.</returns>
+    private async Task<AdvertiseFailure?> TryStartAdvertisingAsync(AdvertiseSettings settings, AdvertiseData data, AdvertiseData scanResponse, CancellationToken ct)
+    {
         _advertise = new AdvertiseHandler();
-        try { _advertiser.StartAdvertising(settings, data, scanResponse, _advertise); }
+        try { _advertiser!.StartAdvertising(settings, data, scanResponse, _advertise); }
         catch (Java.Lang.SecurityException) { throw new IOException(Strings.Err_PermAdvertise); }
 
         using var reg = ct.Register(() => _advertise.Started.TrySetCanceled(ct));
-        try { await _advertise.Started.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
+        try { return await _advertise.Started.Task.WaitAsync(TimeSpan.FromSeconds(5)); }
         catch (TimeoutException) { throw new IOException(Strings.Err_AdvStartTimeout); }
     }
 
@@ -136,7 +156,8 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
         try { _server?.Close(); } catch { }
         _advertise = null; _advertiser = null; _server = null; _callback = null;
         _buttonState = null; _batteryLevel = null;
-        lock (_lock) { _buttonSubscribers.Clear(); _batterySubscribers.Clear(); _parsers.Clear(); }
+        lock (_lock) { _buttonSubscribers.Clear(); _batterySubscribers.Clear(); _preparedWrites.Clear(); _missedNotifications.Clear(); }
+        _appInfo.Clear();
         CurrentAppInfo = null;
         AdvertisedName = null;
         ClientsChanged?.Invoke();
@@ -193,10 +214,40 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
 #pragma warning restore CA1422
             }
             if (!ok) throw new IOException(Strings.Err_NotifyRefused);
-            try { await _notificationSent.Task.WaitAsync(TimeSpan.FromSeconds(1)); }
-            catch (TimeoutException) { /* le client a disparu : la suivante sera tentée quand même */ }
+            try
+            {
+                await _notificationSent.Task.WaitAsync(NotificationAckTimeout);
+                lock (_lock) _missedNotifications.Remove(device.Address!);
+            }
+            catch (TimeoutException)
+            {
+                // Pas d'accusé : le client a peut-être disparu sans déconnexion signalée. Après plusieurs ratés d'affilée,
+                // on cesse de l'attendre, pour qu'il ne retarde plus chaque appui destiné aux autres clients.
+                bool drop;
+                lock (_lock)
+                {
+                    int missed = _missedNotifications.GetValueOrDefault(device.Address!) + 1;
+                    _missedNotifications[device.Address!] = missed;
+                    drop = missed >= MaxMissedNotifications;
+                }
+                if (drop) DropSubscriber(device.Address!, "plus de réponse aux notifications");
+            }
         }
         finally { _notifyGate.Release(); }
+    }
+
+    private void DropSubscriber(string address, string reason)
+    {
+        bool changed;
+        int count;
+        lock (_lock)
+        {
+            changed = _buttonSubscribers.Remove(address);
+            _batterySubscribers.Remove(address);
+            _missedNotifications.Remove(address);
+            count = _buttonSubscribers.Count;
+        }
+        if (changed) { Log?.Invoke($"OBC BLE : client {address} retiré ({reason}), {count} abonné(s)"); ClientsChanged?.Invoke(); }
     }
 
     // ---------- Requêtes des clients ----------
@@ -205,13 +256,17 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
     {
         if (state != ProfileState.Disconnected) return;
         bool changed;
+        int count;
         lock (_lock)
         {
             changed = _buttonSubscribers.Remove(device.Address!);
             _batterySubscribers.Remove(device.Address!);
-            _parsers.Remove(device.Address!);
+            _preparedWrites.Remove(device.Address!);
+            _missedNotifications.Remove(device.Address!);
+            count = _buttonSubscribers.Count;
         }
-        if (changed) { Log?.Invoke($"OBC BLE : {_buttonSubscribers.Count} abonné(s)"); ClientsChanged?.Invoke(); }
+        _appInfo.Remove(device.Address!);
+        if (changed) { Log?.Invoke($"OBC BLE : {count} abonné(s)"); ClientsChanged?.Invoke(); }
     }
 
     private void OnRead(BluetoothDevice device, int requestId, int offset, BluetoothGattCharacteristic characteristic)
@@ -222,11 +277,43 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
         _server?.SendResponse(device, requestId, GattStatus.Success, offset, slice);
     }
 
-    private void OnWrite(BluetoothDevice device, int requestId, BluetoothGattCharacteristic characteristic, bool responseNeeded, int offset, byte[] value)
+    private void OnWrite(BluetoothDevice device, int requestId, BluetoothGattCharacteristic characteristic, bool preparedWrite,
+        bool responseNeeded, int offset, byte[] value)
     {
         if (responseNeeded) _server?.SendResponse(device, requestId, GattStatus.Success, offset, value);
 
         var uuid = AndroidBle.ToGuid(characteristic.Uuid!);
+        if (preparedWrite)
+        {
+            // Écriture longue : le fragment est placé à son offset et ne sera appliqué qu'à l'Execute Write (OnExecuteWrite).
+            lock (_lock)
+            {
+                var data = _preparedWrites.TryGetValue(device.Address!, out var pending) && pending.Characteristic == uuid ? pending.Data : [];
+                if (offset < 0 || offset > 512) return; // longueur maximale d'un attribut ATT
+                if (data.Length < offset + value.Length) Array.Resize(ref data, offset + value.Length);
+                value.CopyTo(data, offset);
+                _preparedWrites[device.Address!] = (uuid, data);
+            }
+            return;
+        }
+        ApplyWrite(device, uuid, value);
+    }
+
+    private void OnExecuteWrite(BluetoothDevice device, int requestId, bool execute)
+    {
+        (Guid Characteristic, byte[] Data) pending;
+        bool has;
+        lock (_lock)
+        {
+            has = _preparedWrites.Remove(device.Address!, out pending);
+        }
+        // Le client attend la réponse à l'Execute Write : sans elle, il coupe la liaison au bout de 30 s (délai ATT).
+        _server?.SendResponse(device, requestId, GattStatus.Success, 0, []);
+        if (execute && has) ApplyWrite(device, pending.Characteristic, pending.Data);
+    }
+
+    private void ApplyWrite(BluetoothDevice device, Guid uuid, byte[] value)
+    {
         if (uuid == ObcGattUuids.Haptic)
         {
             if (ObcMessages.TryDecodeHaptic(value, out var h)) HapticReceived?.Invoke(h);
@@ -234,20 +321,11 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
         else if (uuid == ObcGattUuids.AppInfo)
         {
             // App Info dépasse souvent la MTU : on réassemble les écritures successives de ce client.
-            List<byte[]> messages;
-            lock (_lock)
+            foreach (var info in _appInfo.Feed(device.Address!, value, System.Environment.TickCount64))
             {
-                if (!_parsers.TryGetValue(device.Address!, out var parser)) _parsers[device.Address!] = parser = new ObcStreamParser();
-                messages = [.. parser.Feed(value)];
-            }
-            foreach (var msg in messages)
-            {
-                if (ObcMessages.TryDecodeAppInfo(msg, out var info) && info is not null)
-                {
-                    CurrentAppInfo = info;
-                    Log?.Invoke($"App Info : {info.AppId} {info.AppVersion}");
-                    AppInfoReceived?.Invoke(info);
-                }
+                CurrentAppInfo = info;
+                Log?.Invoke($"App Info : {info.AppId} {info.AppVersion}");
+                AppInfoReceived?.Invoke(info);
             }
         }
     }
@@ -303,7 +381,12 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
             bool preparedWrite, bool responseNeeded, int offset, byte[]? value)
         {
             if (device is not null && characteristic is not null && value is not null)
-                owner.OnWrite(device, requestId, characteristic, responseNeeded, offset, value);
+                owner.OnWrite(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value);
+        }
+
+        public override void OnExecuteWrite(BluetoothDevice? device, int requestId, bool execute)
+        {
+            if (device is not null) owner.OnExecuteWrite(device, requestId, execute);
         }
 
         public override void OnDescriptorWriteRequest(BluetoothDevice? device, int requestId, BluetoothGattDescriptor? descriptor,
@@ -324,11 +407,11 @@ internal sealed class AndroidObcPeripheral(Context context) : IObcTransport
 
     private sealed class AdvertiseHandler : AdvertiseCallback
     {
-        public TaskCompletionSource<bool> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        /// <summary>null quand l'annonce a démarré, sinon le code d'échec.</summary>
+        public TaskCompletionSource<AdvertiseFailure?> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public override void OnStartSuccess(AdvertiseSettings? settingsInEffect) => Started.TrySetResult(true);
+        public override void OnStartSuccess(AdvertiseSettings? settingsInEffect) => Started.TrySetResult(null);
 
-        public override void OnStartFailure(AdvertiseFailure errorCode) =>
-            Started.TrySetException(new IOException(Loc.Fmt(Strings.Err_AdvRefused, errorCode)));
+        public override void OnStartFailure(AdvertiseFailure errorCode) => Started.TrySetResult(errorCode);
     }
 }

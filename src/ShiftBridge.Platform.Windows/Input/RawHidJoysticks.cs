@@ -35,6 +35,29 @@ internal sealed class RawHidJoysticks : IDisposable
         public SwitchProDecoder? Switch;
         public bool FirstReportLogged;
         public string Source => "joy" + Handle;
+
+        // Dernier état lu de chaque partie : un rapport qui ne la contient pas (périphérique à plusieurs identifiants de
+        // rapport) la laisse telle quelle au lieu de la relâcher.
+        public List<ButtonKey> LastButtons = [];
+        public List<ButtonKey> LastHat = [];
+
+        // Tampons réutilisés (jusqu'à 1000 rapports par seconde) et identités de touches mises en cache.
+        public byte[] Report = [];
+        public ushort[] Usages = [];
+        public readonly Dictionary<ushort, ButtonKey> ButtonKeys = [];
+        public readonly Dictionary<string, ButtonKey> NamedKeys = [];
+
+        public ButtonKey Button(ushort usage)
+        {
+            if (!ButtonKeys.TryGetValue(usage, out var k)) ButtonKeys[usage] = k = ButtonKey.Joystick(Id, "B" + usage);
+            return k;
+        }
+
+        public ButtonKey Named(string name)
+        {
+            if (!NamedKeys.TryGetValue(name, out var k)) NamedKeys[name] = k = ButtonKey.Joystick(Id, name);
+            return k;
+        }
     }
 
     private readonly InputAggregator _aggregator;
@@ -191,7 +214,8 @@ internal sealed class RawHidJoysticks : IDisposable
     /// <summary>WM_INPUT_DEVICE_CHANGE : branchement ou retrait à chaud.</summary>
     public void OnDeviceChange(nint wParam, nint lParam)
     {
-        if (wParam == 1) { _devices.Remove(lParam); GetDevice(lParam); PublishDevices(); }   // GIDC_ARRIVAL
+        // GIDC_ARRIVAL : un handle déjà connu est d'abord retiré proprement (données préanalysées libérées, touches relâchées).
+        if (wParam == 1) { Remove(lParam, notify: false); _devices.Remove(lParam); GetDevice(lParam); PublishDevices(); }
         else if (wParam == 2) Remove(lParam, notify: true);                                  // GIDC_REMOVAL
     }
 
@@ -221,9 +245,11 @@ internal sealed class RawHidJoysticks : IDisposable
             int sizeHid = Marshal.ReadInt32(buf, (int)headerSize);
             int count = Marshal.ReadInt32(buf, (int)headerSize + 4);
             if (sizeHid <= 0 || count <= 0) return;
+            if ((long)headerSize + 8 + (long)count * sizeHid > size) return; // rapport incohérent : on ne lit pas hors du tampon
             for (int i = 0; i < count; i++)
             {
-                var report = new byte[sizeHid];
+                if (dev.Report.Length != sizeHid) dev.Report = new byte[sizeHid];
+                var report = dev.Report;
                 Marshal.Copy(buf + (int)headerSize + 8 + i * sizeHid, report, 0, sizeHid);
                 bool nintendo = dev.Switch is not null && SwitchProDecoder.CanDecode(report);
                 if (!dev.FirstReportLogged)
@@ -244,27 +270,44 @@ internal sealed class RawHidJoysticks : IDisposable
     {
         var pressed = new HashSet<ButtonKey>();
 
-        // Boutons (page 0x09) : HidP_GetUsages renvoie ceux qui sont enfoncés.
+        // Boutons (page 0x09) : HidP_GetUsages renvoie ceux qui sont enfoncés. Échec (rapport d'un autre identifiant, qui ne
+        // porte pas les boutons) : on garde l'état précédent, sinon les boutons tenus clignoteraient appuyé/relâché.
         if (d.MaxButtons > 0)
         {
-            var usages = new ushort[d.MaxButtons];
+            if (d.Usages.Length != d.MaxButtons) d.Usages = new ushort[d.MaxButtons];
             uint len = d.MaxButtons;
-            if (Native.HidP_GetUsages(Native.HidP_Input, PageButton, 0, usages, ref len, d.Preparsed, report, (uint)report.Length)
+            if (Native.HidP_GetUsages(Native.HidP_Input, PageButton, 0, d.Usages, ref len, d.Preparsed, report, (uint)report.Length)
                 == Native.HIDP_STATUS_SUCCESS)
-                for (int i = 0; i < len; i++) pressed.Add(ButtonKey.Joystick(d.Id, "B" + usages[i]));
+            {
+                d.LastButtons.Clear();
+                for (int i = 0; i < len; i++) d.LastButtons.Add(d.Button(d.Usages[i]));
+            }
+            pressed.UnionWith(d.LastButtons);
         }
 
-        // Croix directionnelle.
-        if (d.Hat is { } hat && Native.HidP_GetUsageValue(Native.HidP_Input, PageGenericDesktop, 0, UsageHat, out var raw,
-                d.Preparsed, report, (uint)report.Length) == Native.HIDP_STATUS_SUCCESS)
-            foreach (var dir in HidMapping.HatDirections(HidMapping.HatIndex((int)raw, hat.Min, hat.Max)))
-                pressed.Add(ButtonKey.Joystick(d.Id, dir));
+        // Croix directionnelle (même règle).
+        if (d.Hat is { } hat)
+        {
+            if (Native.HidP_GetUsageValue(Native.HidP_Input, PageGenericDesktop, 0, UsageHat, out var raw,
+                    d.Preparsed, report, (uint)report.Length) == Native.HIDP_STATUS_SUCCESS)
+            {
+                d.LastHat.Clear();
+                foreach (var dir in HidMapping.HatDirections(HidMapping.HatIndex((int)raw, hat.Min, hat.Max)))
+                    d.LastHat.Add(d.Named(dir));
+            }
+            pressed.UnionWith(d.LastHat);
+        }
 
         // Axes analogiques → directions numériques avec hystérésis.
         foreach (var a in d.Axes)
         {
             if (Native.HidP_GetUsageValue(Native.HidP_Input, PageGenericDesktop, 0, a.Usage, out var v,
-                    d.Preparsed, report, (uint)report.Length) != Native.HIDP_STATUS_SUCCESS) continue;
+                    d.Preparsed, report, (uint)report.Length) != Native.HIDP_STATUS_SUCCESS)
+            {
+                // Axe absent de ce rapport : sa dernière direction reste valable.
+                if (!a.Ignored && a.Direction != 0) pressed.Add(d.Named(a.Name + (a.Direction > 0 ? "Plus" : "Minus")));
+                continue;
+            }
             long value = v;
             if (a.Min < 0 && a.BitSize is > 0 and < 32 && (v & (1u << (a.BitSize - 1))) != 0) value = (int)(v | (~0u << a.BitSize));
             double norm = Math.Clamp((value - a.Min) / (double)(a.Max - a.Min), 0, 1);
@@ -276,7 +319,7 @@ internal sealed class RawHidJoysticks : IDisposable
             }
             if (a.Ignored) continue;
             a.Direction = HidMapping.AxisDirection(norm, a.Direction);
-            if (a.Direction != 0) pressed.Add(ButtonKey.Joystick(d.Id, a.Name + (a.Direction > 0 ? "Plus" : "Minus")));
+            if (a.Direction != 0) pressed.Add(d.Named(a.Name + (a.Direction > 0 ? "Plus" : "Minus")));
         }
         return pressed;
     }

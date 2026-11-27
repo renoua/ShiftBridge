@@ -17,7 +17,16 @@ public sealed class ControlPointArbiter : IDisposable
     private readonly TimeSpan _responseTimeout;
     private readonly object _lock = new();
     private readonly Queue<byte[]> _proxyFifo = new();
-    private readonly Queue<(byte[] Cp, TaskCompletionSource<bool> Done)> _appQueue = new();
+    private readonly Queue<(byte[] Cp, Func<byte[], byte[]>? Adjust, TaskCompletionSource<bool> Done)> _appQueue = new();
+    /// <summary>
+    /// Commandes expirées dont la réponse peut encore arriver (opcode, heure d'expiration) : une réponse tardive leur est
+    /// attribuée et ignorée, au lieu d'être prise pour celle d'un autre client.
+    /// </summary>
+    private readonly List<(byte Op, long Tick)> _orphans = [];
+    /// <summary>Au-delà, une commande expirée n'attend plus sa réponse.</summary>
+    private const long OrphanLifetimeMs = 5000;
+    /// <summary>Code de résultat FTMS « Operation Failed ».</summary>
+    public const byte ResultOperationFailed = 0x04;
     private readonly SemaphoreSlim _signal = new(0);
     private readonly CancellationTokenSource _cts = new();
     private readonly Task _loop;
@@ -62,13 +71,18 @@ public sealed class ControlPointArbiter : IDisposable
     public event Action<byte>? Timeout;
     public event Action<string>? Log;
 
-    /// <summary>Met en file une commande de l'appli. Le résultat vaut vrai quand elle a été ENVOYÉE au trainer.</summary>
-    public Task<bool> SubmitFromAppAsync(byte[] cp)
+    /// <summary>
+    /// Met en file une commande de l'appli. Le résultat vaut vrai quand elle a été ENVOYÉE au trainer.
+    /// <paramref name="adjust"/> : réécriture appliquée au moment de l'envoi (et non de la mise en file), pour qu'un changement
+    /// de rapport survenu pendant l'attente soit pris en compte.
+    /// </summary>
+    public Task<bool> SubmitFromAppAsync(byte[] cp, Func<byte[], byte[]>? adjust = null)
     {
         var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_lock)
         {
-            _appQueue.Enqueue((cp, done));
+            if (_cts.IsCancellationRequested) return Task.FromResult(false);
+            _appQueue.Enqueue((cp, adjust, done));
             // Une nouvelle cible de l'appli remplace toute ré-application du proxy encore en attente.
             if (cp.Length > 0 && FtmsCodec.IsTargetCommand(cp[0])) _pendingProxy = null;
         }
@@ -96,6 +110,7 @@ public sealed class ControlPointArbiter : IDisposable
         Owner? owner = null;
         TaskCompletionSource? resolved = null;
         double elapsed = 0;
+        bool late = false;
         lock (_lock)
         {
             if (_inFlight is { } f && FtmsCodec.IsResponseTo(indication, f.Op))
@@ -107,8 +122,16 @@ public sealed class ControlPointArbiter : IDisposable
                 elapsed = Environment.TickCount64 - _inFlightSentTick;
                 _responseEmaMs = _responseEmaMs * 0.7 + elapsed * 0.3;
             }
+            else
+            {
+                long now = Environment.TickCount64;
+                _orphans.RemoveAll(o => now - o.Tick > OrphanLifetimeMs);
+                int i = _orphans.FindIndex(o => FtmsCodec.IsResponseTo(indication, o.Op));
+                if (i >= 0) { _orphans.RemoveAt(i); late = true; }
+            }
         }
 
+        if (late) { Log?.Invoke($"Réponse tardive du trainer à une commande expirée ({Convert.ToHexString(indication)}) : ignorée."); return; }
         if (owner is null) { ForeignResponse?.Invoke(indication); return; }
         ResponseLatency?.Invoke(elapsed);
         if (owner == Owner.App) ResponseForApp?.Invoke(indication); // la réponse à une commande du proxy n'est pas transmise
@@ -145,7 +168,14 @@ public sealed class ControlPointArbiter : IDisposable
                 if (_inFlight is not null) return; // on attend sa réponse (OnResponse relance la boucle)
 
                 if (_proxyFifo.TryDequeue(out var replay)) { cp = replay; owner = Owner.Proxy; }
-                else if (_appQueue.TryDequeue(out var a)) { cp = a.Cp; owner = Owner.App; done = a.Done; }
+                else if (_appQueue.TryDequeue(out var a))
+                {
+                    cp = a.Cp; owner = Owner.App; done = a.Done;
+                    if (a.Adjust is { } adjust)
+                    {
+                        try { cp = adjust(cp); } catch (Exception ex) { Log?.Invoke($"Réécriture de la commande impossible : {ex.Message}"); }
+                    }
+                }
                 else if (_pendingProxy is { } p)
                 {
                     long since = Environment.TickCount64 - _lastProxySendTick;
@@ -177,7 +207,12 @@ public sealed class ControlPointArbiter : IDisposable
                 await _send(cp, ct);
                 done?.TrySetResult(true);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (OperationCanceledException)
+            {
+                done?.TrySetResult(false); // arrêt : l'appli ne doit pas attendre indéfiniment
+                throw;
+            }
+            catch (Exception ex)
             {
                 lock (_lock) { _inFlight = null; _resolved = null; }
                 Log?.Invoke($"Envoi Control Point (0x{cp[0]:X2}) impossible : {ex.Message}");
@@ -193,17 +228,34 @@ public sealed class ControlPointArbiter : IDisposable
                 lock (_lock)
                 {
                     stillInFlight = _inFlight is { } f && f.Op == cp[0];
-                    if (stillInFlight) { _inFlight = null; _resolved = null; }
+                    if (stillInFlight)
+                    {
+                        _inFlight = null; _resolved = null;
+                        _orphans.Add((cp[0], Environment.TickCount64)); // sa réponse peut encore arriver
+                    }
                 }
-                if (stillInFlight) Timeout?.Invoke(cp[0]);
+                if (stillInFlight)
+                {
+                    Timeout?.Invoke(cp[0]);
+                    // L'appli attend une réponse à SA commande : sans elle, certaines restent bloquées. On lui répond « échec ».
+                    if (owner == Owner.App) ResponseForApp?.Invoke([FtmsCodec.OpResponse, cp[0], ResultOperationFailed]);
+                }
             }
         }
     }
 
     public void Dispose()
     {
-        _cts.Cancel();
+        List<TaskCompletionSource<bool>> waiting;
+        lock (_lock)
+        {
+            if (_cts.IsCancellationRequested) return;
+            _cts.Cancel();
+            // Les commandes de l'appli encore en file ne partiront jamais : leurs émetteurs ne doivent pas attendre indéfiniment.
+            waiting = [.. _appQueue.Select(a => a.Done)];
+            _appQueue.Clear();
+        }
+        foreach (var d in waiting) d.TrySetResult(false);
         try { _loop.Wait(500); } catch { }
-        _cts.Dispose();
     }
 }

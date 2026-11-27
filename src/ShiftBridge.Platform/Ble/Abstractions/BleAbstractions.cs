@@ -42,8 +42,8 @@ public sealed record BleServiceInfo(Guid Uuid, IReadOnlyList<BleCharacteristicIn
 /// <summary>Appareil introuvable (éteint, hors de portée ou déjà connecté ailleurs). Chaque appelant reformule le message.</summary>
 public sealed class BleDeviceNotFoundException(string message) : IOException(message);
 
-/// <param name="OperationTimeout">Délai maximal de chaque opération GATT (null = aucun, comportement historique des manettes).</param>
-/// <param name="HighPriority">Demande un intervalle de connexion court (Android) : pour les groupes qui coupent une liaison peu active.</param>
+/// <param name="OperationTimeout">Délai maximal de chaque opération GATT (null = délai par défaut de la plateforme : 15 s sous Windows et macOS, 10 s sous Android).</param>
+/// <param name="HighPriority">Groupe qui coupe une liaison peu active (sous Android, toutes les liaisons sont déjà en priorité haute).</param>
 public sealed record BleConnectOptions(TimeSpan? OperationTimeout = null, bool HighPriority = false);
 
 /// <summary>

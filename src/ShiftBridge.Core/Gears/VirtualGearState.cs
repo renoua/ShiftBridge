@@ -32,6 +32,8 @@ public sealed class VirtualGearState(int gearCount = 24, int initialGear = 12)
             case ObcButtonId.CenterGear:
                 return GoTo((GearCount + 1) / 2);
             case ObcButtonId.GoToGear:
+                // Cible non réglée (champ vide, profil changé entre-temps) : ne rien faire plutôt que sauter au rapport 1.
+                if (target <= 0) return GearChange.None;
                 return GoTo(target);
             case ObcButtonId.ShiftUp:
                 if (Gear >= GearCount) return GearChange.AtTopLimit;

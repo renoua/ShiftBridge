@@ -20,6 +20,8 @@ public sealed class InputAggregator
         {
             var events = new List<ButtonEvent>();
             var old = _bySource.GetValueOrDefault(source) ?? [];
+            // Joysticks : jusqu'à 1000 rapports par seconde, presque tous identiques au précédent. Rien à copier ni à comparer.
+            if (old.Count == pressed.Count && old.SetEquals(pressed)) return events;
             foreach (var k in old)
                 if (!pressed.Contains(k)) Release(k, events);
             foreach (var k in pressed)

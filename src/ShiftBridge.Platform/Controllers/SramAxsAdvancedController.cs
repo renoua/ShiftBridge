@@ -33,6 +33,7 @@ public sealed class SramAxsAdvancedController : IController
     private readonly IBleCentral _central;
     private readonly ISramKeyStore _keys;
     private readonly SramAxsShiftTracker _tracker = new();
+    private readonly object _trackerLock = new();
     private readonly SemaphoreSlim _tapGate = new(1, 1);
     private readonly SemaphoreSlim _readGate = new(1, 1);
     private readonly object _bondLock = new();
@@ -133,7 +134,7 @@ public sealed class SramAxsAdvancedController : IController
     {
         _disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         _monitoring = false;
-        _tracker.Reset();
+        lock (_trackerLock) _tracker.Reset();
         _tracker.GearCount = SramAxsFrames.DefaultGearCount;
 
         try { _connection = await _central.ConnectAsync(Info.Address, new BleConnectOptions(HighPriority: true), ct); }
@@ -156,7 +157,7 @@ public sealed class SramAxsAdvancedController : IController
             var mode = f.Char.CanNotify ? BleNotifyMode.Notify : f.Char.CanIndicate ? BleNotifyMode.Indicate : BleNotifyMode.None;
             if (mode == BleNotifyMode.None) continue;
             try { await _connection.SetNotifyAsync(f.Service, chr, mode); }
-            catch (Exception ex) { Log?.Invoke($"{Info.Name} : abonnement {SramAxsDecoder.IsAxsService(f.Service)} {BleInspector.ShortUuid(chr)} impossible ({ex.Message})"); }
+            catch (Exception ex) { Log?.Invoke($"{Info.Name} : abonnement {BleInspector.ShortUuid(f.Service)}/{BleInspector.ShortUuid(chr)} impossible ({ex.Message})"); }
         }
 
         _key = _serial.Length > 0 ? _keys.Get(_serial) : null;
@@ -237,7 +238,14 @@ public sealed class SramAxsAdvancedController : IController
         try
         {
             var read = await connection.ReadAsync(service, BondCharacteristic);
-            if (read.Length == expected) return read;
+            if (read.Length == expected)
+            {
+                // La même valeur peut aussi être arrivée par notification : on la retire du tampon, sinon l'étape suivante
+                // y lirait ces octets périmés devant les siens.
+                lock (_bondLock)
+                    if (_bondBuffer.Count >= expected && _bondBuffer.Take(expected).SequenceEqual(read)) _bondBuffer.RemoveRange(0, expected);
+                return read;
+            }
             Log?.Invoke($"{Info.Name} : lecture d'appairage de {read.Length} octets (attendu {expected}), attente de notifications");
         }
         catch (Exception ex) { Log?.Invoke($"{Info.Name} : lecture d'appairage impossible ({ex.Message}), attente de notifications"); }
@@ -273,7 +281,7 @@ public sealed class SramAxsAdvancedController : IController
     {
         if (_monitoring) return;
         _monitoring = true;
-        _tracker.Reset();
+        lock (_trackerLock) _tracker.Reset();
 
         if (Find(ConfigCharacteristic) is { } cfg && _connection is not null && _key is not null)
         {
@@ -287,8 +295,11 @@ public sealed class SramAxsAdvancedController : IController
 
         SetState(ControllerState.Connected);
         await ReadLiveAsync();
-        if (_linkCts is { } link) _ = KeepAliveLoopAsync(link.Token);
+        // Une seule boucle de maintien par liaison, même après un nouvel appairage (ForgetKey puis appairage).
+        if (_linkCts is { } link && !ReferenceEquals(_keepAliveFor, link)) { _keepAliveFor = link; _ = KeepAliveLoopAsync(link.Token); }
     }
+
+    private CancellationTokenSource? _keepAliveFor;
 
     private async Task KeepAliveLoopAsync(CancellationToken ct)
     {
@@ -354,7 +365,9 @@ public sealed class SramAxsAdvancedController : IController
         // Diagnostic gauche/droite : tous les champs déchiffrés (jamais la clé). Le texte clair ne contient que l'état du dérailleur.
         if (VerboseFrames) Frame?.Invoke($"{Info.Name} : {BleInspector.ShortUuid(characteristic)} champs {SramAxsFrames.DescribeFields(plain)}");
         if (!SramAxsFrames.TryParseDrivetrain(plain, out int rear, out int? front)) return;
-        var taps = _tracker.Update(rear);
+        // Trames lues (lecture) et reçues (notification) peuvent être traitées en même temps : le suivi du pignon est protégé.
+        List<string> taps;
+        lock (_trackerLock) taps = [.. _tracker.Update(rear)];
         if (VerboseFrames || taps.Count > 0) Frame?.Invoke($"{Info.Name} : pignon {rear}{(front is { } f ? $", plateau {f}" : "")}{(taps.Count > 0 ? $" → {string.Join(", ", taps)}" : "")}");
         if (taps.Count > 0) _ = EmitTapsAsync([.. taps.Select(n => ButtonKey.Controller(ControllerKind.SramAxs, n))]);
     }

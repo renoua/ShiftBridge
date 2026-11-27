@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ShiftBridge.Core.Controllers;
+using ShiftBridge.Core.Input;
 using ShiftBridge.Core.Mapping;
 
 namespace ShiftBridge.Core.Config;
@@ -137,19 +138,20 @@ public sealed class AppConfig
     public void Normalize()
     {
         Profile ??= Profile.ZwiftLike();
-        Profile.Bindings ??= [];
+        CleanBindings(Profile);
         // Clés normalisées (fichier édité à la main), profils vides ou nuls écartés.
         var appProfiles = new Dictionary<string, Profile>();
         foreach (var (appId, profile) in AppProfiles ?? [])
         {
             string key = AppProfileKey.Normalize(appId);
             if (key.Length == 0 || profile is null) continue;
-            profile.Bindings ??= [];
+            CleanBindings(profile);
             appProfiles[key] = profile;
         }
         AppProfiles = appProfiles;
         KnownDevices ??= [];
-        KnownControllerKinds ??= [];
+        // Modèle de manette inconnu (écrit par une version plus récente) : l'appareil sera reconnu de nouveau à la recherche.
+        KnownControllerKinds = (KnownControllerKinds ?? []).Where(p => Enum.IsDefined(p.Value)).ToDictionary(p => p.Key, p => p.Value);
         SramAxsKeys ??= [];
         DeviceNames = (DeviceNames ?? []).Where(p => !string.IsNullOrWhiteSpace(p.Value))
             .ToDictionary(p => p.Key, p => p.Value.Trim().Length > 40 ? p.Value.Trim()[..40] : p.Value.Trim());
@@ -166,6 +168,25 @@ public sealed class AppConfig
         LastGear = Math.Clamp(LastGear, 0, GearCount);
         if (!Enum.IsDefined(RepeatSpeed)) RepeatSpeed = RepeatSpeeds.Default;
     }
+
+    /// <summary>
+    /// Retire les actions inconnues de cette version (lues par <see cref="TolerantEnumConverter{T}"/>) et les assignations
+    /// restées sans action : le reste du profil est conservé.
+    /// </summary>
+    private static void CleanBindings(Profile profile)
+    {
+        var cleaned = new Dictionary<ButtonKey, ButtonBinding>();
+        foreach (var (key, binding) in profile.Bindings ?? [])
+        {
+            if (binding is null) continue;
+            binding.Actions = (binding.Actions ?? []).Where(a => Enum.IsDefined(a)).ToList();
+            if (binding.Actions.Count == 0) continue;
+            binding.GearTarget = Math.Max(0, binding.GearTarget);
+            binding.GearSteps = Math.Max(0, binding.GearSteps);
+            cleaned[key] = binding;
+        }
+        profile.Bindings = cleaned;
+    }
 }
 
 /// <summary>Configuration JSON dans %APPDATA%\ShiftBridge\config.json. Un fichier illisible ne bloque jamais le démarrage.</summary>
@@ -174,8 +195,14 @@ public static class ConfigStore
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new TolerantEnumConverterFactory() },
     };
+
+    /// <summary>Sérialise les écritures du fichier (sauvegardes simultanées), sans bloquer ceux qui modifient la config.</summary>
+    private static readonly object FileLock = new();
+
+    /// <summary>Tentatives de lecture quand le fichier est momentanément verrouillé (antivirus, synchronisation, autre instance).</summary>
+    private const int ReadAttempts = 3;
 
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ShiftBridge", "config.json");
@@ -183,19 +210,34 @@ public static class ConfigStore
     public static AppConfig Load(string? path = null)
     {
         path ??= DefaultPath;
-        try
+        for (int attempt = 1; attempt <= ReadAttempts; attempt++)
         {
-            if (File.Exists(path))
+            string text;
+            try
             {
-                var loaded = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), Options) ?? new AppConfig();
+                if (!File.Exists(path)) return new AppConfig();
+                text = File.ReadAllText(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Fichier momentanément inaccessible : surtout NE PAS le mettre de côté, il est probablement valide.
+                if (attempt < ReadAttempts) { Thread.Sleep(150 * attempt); continue; }
+                return new AppConfig();
+            }
+
+            try
+            {
+                var loaded = JsonSerializer.Deserialize<AppConfig>(text, Options) ?? new AppConfig();
                 loaded.Normalize();
                 return loaded;
             }
-        }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-        {
-            // On garde l'ancien fichier pour diagnostic et on repart sur les valeurs par défaut.
-            try { File.Move(path, path + ".bad", overwrite: true); } catch { /* ignoré */ }
+            catch (JsonException)
+            {
+                // Contenu réellement illisible : on le garde pour diagnostic (sans écraser un précédent) et on repart des défauts.
+                string bad = $"{path}.bad-{DateTime.Now:yyyyMMdd-HHmmss}";
+                try { File.Move(path, bad, overwrite: false); } catch { /* ignoré */ }
+                return new AppConfig();
+            }
         }
         return new AppConfig();
     }
@@ -204,13 +246,21 @@ public static class ConfigStore
     {
         path ??= DefaultPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        // Le verrou couvre la sérialisation ET l'écriture : deux sauvegardes simultanées ne se disputent plus le même
-        // fichier temporaire, et une liste modifiée pendant la sérialisation ne la fait plus échouer.
-        lock (config.SyncRoot)
+        // Sérialisation sous le verrou de la config (une liste modifiée pendant ce temps ne la fait plus échouer), écriture
+        // disque en dehors : le fil Bluetooth, qui prend ce verrou à chaque annonce, n'attend plus le disque.
+        string json;
+        lock (config.SyncRoot) json = JsonSerializer.Serialize(config, Options);
+        lock (FileLock)
         {
             var tmp = path + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(config, Options));
-            File.Move(tmp, path, overwrite: true); // écriture atomique
+            using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(fs, new System.Text.UTF8Encoding(false)))
+            {
+                writer.Write(json);
+                writer.Flush();
+                fs.Flush(flushToDisk: true); // sans cela, une coupure de courant peut laisser un fichier vide
+            }
+            File.Move(tmp, path, overwrite: true); // remplacement atomique
         }
     }
 }

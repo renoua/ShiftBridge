@@ -95,7 +95,12 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     }
     public event Action? NativeStateChanged;
 
-    private ZwiftTrainerChannel? _native;
+    private volatile ZwiftTrainerChannel? _native;
+    /// <summary>
+    /// Une transition du canal natif à la fois (activation, désactivation, réouverture après reconnexion, arrêt du proxy) :
+    /// sans cela, une réouverture pouvait rattacher à la liaison un canal en cours de libération.
+    /// </summary>
+    private readonly SemaphoreSlim _nativeGate = new(1, 1);
     private bool _nonSimTargetActive;   // la dernière cible de l'appli n'est pas une simulation (ERG…)
     private long _lastNativeLogTick;
     public int Port { get; private set; }
@@ -103,9 +108,16 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     public double LastSpeedMs { get { lock (_state) return _lastSpeedMs; } }
     private int? _lastPowerW;
     private double? _lastCadenceRpm;
-    /// <summary>Dernière puissance (W) et cadence (tr/min) mesurées par le trainer (null si absentes) : affichées dans la superposition.</summary>
-    public int? LastPowerW { get { lock (_state) return _lastPowerW; } }
-    public double? LastCadenceRpm { get { lock (_state) return _lastCadenceRpm; } }
+    private long _lastPowerTick, _lastCadenceTick;
+    private int _packetsWithoutSpeed;
+    private bool _cadenceFromFragment;
+    /// <summary>Durée pendant laquelle une mesure absente des notifications suivantes reste valable (trames « More Data »).</summary>
+    private const long FieldFreshMs = 3000;
+    /// <summary>Paquets d'affilée sans vitesse avant d'avertir (un trainer qui fragmente ses mesures en envoie un sur deux).</summary>
+    private const int PacketsBeforeNoSpeedWarning = 10;
+    /// <summary>Dernière puissance (W) et cadence (tr/min) mesurées par le trainer (null si absentes depuis 3 s) : affichées dans la superposition.</summary>
+    public int? LastPowerW { get { lock (_state) return Environment.TickCount64 - _lastPowerTick <= FieldFreshMs ? _lastPowerW : null; } }
+    public double? LastCadenceRpm { get { lock (_state) return Environment.TickCount64 - _lastCadenceTick <= FieldFreshMs ? _lastCadenceRpm : null; } }
     public FtmsFeatures? Features { get; private set; }
 
     /// <summary>
@@ -178,7 +190,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
 
         if (_upstream is IReconnectingLink rl)
         {
-            rl.Dropped += () => Log?.Invoke("Trainer déconnecté, reconnexion en cours…");
+            rl.Dropped += OnUpstreamDropped;
             rl.Reconnected += OnUpstreamReconnected;
         }
 
@@ -198,10 +210,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         var txt = new Dictionary<string, string>(_txtTemplate ?? new Dictionary<string, string>());
         txt["mac-address"] = mac;
         txt["serial-number"] = serial;
-        if (!txt.ContainsKey("ble-service-uuids"))
-            txt["ble-service-uuids"] = string.Join(",", _tree.Keys.Select(ShortOrFull));
-        else if (_hrInjected && !txt["ble-service-uuids"].Contains("180d", StringComparison.OrdinalIgnoreCase))
-            txt["ble-service-uuids"] += ",0x180D";
+        txt["ble-service-uuids"] = AdvertisedServiceList(txt.GetValueOrDefault("ble-service-uuids"), _tree.Keys);
         try { _mdns.Advertise($"{_name} {serial[^4..]}", "_wahoo-fitness-tnp._tcp", (ushort)Port, txt, m => Log?.Invoke(m)); }
         catch (Exception ex) { Log?.Invoke($"mDNS indisponible : {ex.Message}"); }
 
@@ -250,12 +259,47 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         catch (Exception ex) { Log?.Invoke($"Lecture des fonctions FTMS impossible : {ex.Message}"); }
     }
 
-    private static string ShortOrFull(Guid g)
+    /// <summary>
+    /// Valeur TXT « ble-service-uuids » annoncée à l'appli. Avec le modèle du vrai trainer (DirCon), on garde sa liste et sa
+    /// présentation, mais sans les services que le proxy ne relaie pas (le service Zwift, toujours retiré) : l'appli n'en
+    /// cherchera pas un que la découverte ne renvoie pas. Le service cardio republié est ajouté s'il manque. Sans modèle, la
+    /// liste est construite d'après l'arbre relayé, en se limitant aux UUID courts si elle dépasserait une chaîne TXT (255 octets).
+    /// </summary>
+    internal static string AdvertisedServiceList(string? template, IEnumerable<Guid> relayed)
     {
-        var s = g.ToString();
-        return s.StartsWith("0000", StringComparison.Ordinal) && s.EndsWith("-0000-1000-8000-00805f9b34fb", StringComparison.Ordinal)
-            ? "0x" + s.Substring(4, 4) : s;
+        var services = relayed.ToHashSet();
+        if (!string.IsNullOrWhiteSpace(template))
+        {
+            var kept = template.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(item => TrainerReport.TryParseUuid(item) is not { } g || services.Contains(g)).ToList();
+            if (services.Contains(HeartRateCodec.Service) && !kept.Any(i => TrainerReport.TryParseUuid(i) == HeartRateCodec.Service))
+                kept.Add("0x180D");
+            return string.Join(",", kept);
+        }
+        var all = string.Join(",", services.Select(g => TrainerReport.ShortUuid(g, upper: false)));
+        return all.Length <= 250 ? all
+            : string.Join(",", services.Select(g => TrainerReport.ShortUuid(g, upper: false)).Where(s => s.StartsWith("0x", StringComparison.Ordinal)));
     }
+
+    /// <summary>Caractéristique de contrôle propriétaire Wahoo (service 0x1818 des KICKR) : simulation, ERG, pente.</summary>
+    internal static readonly Guid WahooTrainerControl = new("a026e005-0a7d-4ab3-97fa-f1500f9feb8b");
+    private int _bypassWarned;
+
+    /// <summary>
+    /// L'appli pilote le trainer par un canal que le proxy relaie sans le réécrire (Wahoo propriétaire, FE-C alors que FTMS
+    /// pilote) : le virtual shifting est contourné. Signalé une fois, pour expliquer « les vitesses ne changent rien ».
+    /// </summary>
+    private void WarnIfBypassingShifting(Guid ch)
+    {
+        if (!Enabled || NativeActive) return;
+        bool bypass = ch == WahooTrainerControl || (ch == FecCodec.Tx && Control == TrainerControl.Ftms);
+        if (!bypass || Interlocked.Exchange(ref _bypassWarned, 1) != 0) return;
+        Log?.Invoke($"ATTENTION : l'appli pilote le trainer par {(ch == WahooTrainerControl ? "le canal Wahoo propriétaire" : "le canal FE-C")}, " +
+                    "que ShiftBridge relaie sans le modifier : le virtual shifting est sans effet. Dans l'appli, choisissez le " +
+                    "contrôle FTMS du trainer, ou désactivez le relais complet (page Trainer, options avancées).");
+    }
+
+    private void OnUpstreamDropped() => Log?.Invoke("Trainer déconnecté, reconnexion en cours…");
 
     // ---------- Mesure du braquet réel ----------
 
@@ -329,7 +373,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     {
         if (!FecCodec.TryParseTrack(track, out short grade, out double crr)) return track;
         double speed, cw;
-        lock (_state) { speed = _lastSpeedMs; cw = _fecCw; }
+        lock (_state) { speed = _lastSpeedMs; cw = _fecCw; _speedAtLastAdjust = speed; _lastAdjustTick = Environment.TickCount64; }
         var sim = new SimulationParams(0, grade,
             (byte)Math.Clamp(Math.Round(crr / 0.0001), 0, 255), (byte)Math.Clamp(Math.Round(cw / 0.01), 0, 255));
         short adjusted = _model.AdjustGrade(sim, speed);
@@ -351,14 +395,26 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         finally { _fecWriteGate.Release(); }
     }
 
-    /// <summary>Changement de rapport : la dernière simulation de l'appli, réajustée. Rien en ERG ou en résistance fixe.</summary>
+    private int _fecReapplyQueued;
+
+    /// <summary>
+    /// Changement de rapport : la dernière simulation de l'appli, réajustée. Rien en ERG ou en résistance fixe. Une rafale de
+    /// changements ne met en file qu'une seule écriture, calculée au moment de l'envoi avec le DERNIER rapport.
+    /// </summary>
     private async Task ReapplyFecAsync()
     {
-        byte[]? track; byte target;
-        lock (_state) { track = _fecAppTrack; target = _fecLastTarget; }
-        if (track is null || target != FecCodec.PageTrackResistance || !_upstream.IsConnected) return;
-        try { await WriteFecAsync(AdjustFec(track)); }
+        if (Interlocked.Exchange(ref _fecReapplyQueued, 1) == 1) return; // une ré-application attend déjà : elle prendra ce rapport
+        await _fecWriteGate.WaitAsync();
+        try
+        {
+            Interlocked.Exchange(ref _fecReapplyQueued, 0);
+            byte[]? track; byte target;
+            lock (_state) { track = _fecAppTrack; target = _fecLastTarget; }
+            if (track is null || target != FecCodec.PageTrackResistance || !_upstream.IsConnected) return;
+            await _upstream.WriteAsync(FecCodec.Tx, AdjustFec(track));
+        }
         catch (Exception ex) { Log?.Invoke($"Virtual shifting (FE-C) : envoi au trainer impossible ({ex.Message})"); }
+        finally { _fecWriteGate.Release(); }
     }
 
     /// <summary>Écriture de l'appli sur FEC3 : mémorise l'état demandé, réécrit la pente des pages 0x33, relaie le reste tel quel.</summary>
@@ -376,7 +432,13 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
                 {
                     if (FecCodec.IsTargetPage(page)) _fecLastTarget = page;
                     if (page == FecCodec.PageTrackResistance) _fecAppTrack = m;
-                    else if (page == FecCodec.PageUserConfiguration) _fecUserConfig = m;
+                    else if (page == FecCodec.PageUserConfiguration)
+                    {
+                        _fecUserConfig = m;
+                        // La masse que l'appli simule (cycliste + vélo) fait foi pour la correction de pente.
+                        if (FecCodec.TryParseUserConfig(m, out var riderKg, out var bikeKg) && riderKg is { } r)
+                            _model.TotalMassKg = Math.Clamp(r + (bikeKg ?? BikeWeightKg), 30, 250);
+                    }
                     else if (page == FecCodec.PageWindResistance && FecCodec.TryParseWindCw(m, out var cw)) _fecCw = cw;
                 }
                 output.AddRange(Enabled && page == FecCodec.PageTrackResistance ? AdjustFec(m) : m);
@@ -400,8 +462,13 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             var m = messages[i];
             if (FecCodec.TryGetTrainerData(m, out var cadence, out var power))
             {
-                BikeData.Add(Environment.TickCount64, power);
-                lock (_state) { _lastPowerW = power; _lastCadenceRpm = cadence; _fecCadence = cadence; }
+                long tick = Environment.TickCount64;
+                BikeData.Add(tick, power);
+                lock (_state)
+                {
+                    _lastPowerW = power; _lastCadenceRpm = cadence; _fecCadence = cadence;
+                    _lastPowerTick = _lastCadenceTick = tick;
+                }
             }
             else if (FecCodec.TryGetSpeedMs(m, out var v))
             {
@@ -409,6 +476,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
                 RealRatioDetector? detector; int? rpm;
                 lock (_state) { _lastSpeedMs = v; detector = _detector; rpm = _fecCadence; }
                 detector?.AddSample(v, rpm ?? 0);
+                RefreshForSpeedChange(v, Environment.TickCount64);
                 if (Enabled && Math.Abs(_model.Factor - 1.0) > 1e-9) { messages[i] = FecCodec.ScaleSpeed(m, _model.Factor); changed = true; }
             }
         }
@@ -419,7 +487,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     {
         if (!FtmsCodec.TryParseSimulation(cp, out var sim)) return cp;
         double speed;
-        lock (_state) speed = _lastSpeedMs;
+        lock (_state) { speed = _lastSpeedMs; _speedAtLastAdjust = speed; _lastAdjustTick = Environment.TickCount64; }
         var adjusted = _model.AdjustSimulation(sim, speed);
         if (adjusted == sim) return cp;
 
@@ -431,6 +499,31 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
                         $"roulement {sim.Crr:0.0000} → {adjusted.Crr:0.0000}, traînée {sim.Cw:0.00} → {adjusted.Cw:0.00}");
         }
         return FtmsCodec.WithSimulation(cp, adjusted);
+    }
+
+    private double _speedAtLastAdjust;
+    private long _lastAdjustTick;
+    /// <summary>Écart de vitesse (relatif) au-delà duquel la correction de traînée calculée est périmée.</summary>
+    private const double SpeedRefreshShare = 0.10;
+    /// <summary>Intervalle minimal entre deux ré-applications dues à la vitesse (le trainer n'est pas inondé de commandes).</summary>
+    private const long SpeedRefreshMinMs = 3000;
+
+    /// <summary>
+    /// La pente réécrite dépend de la vitesse (terme de traînée) : une appli qui n'envoie la pente que lorsqu'elle change (long
+    /// plat) laisserait une correction calculée à une autre vitesse. On ré-applique la simulation quand la vitesse a varié de
+    /// plus de 10 %, au plus toutes les 3 s. Sans effet en natif (le trainer calcule lui-même) et hors simulation (ERG).
+    /// </summary>
+    private void RefreshForSpeedChange(double speedMs, long now)
+    {
+        if (!Enabled || NativeActive) return;
+        bool refresh;
+        lock (_state)
+        {
+            refresh = _lastAdjustTick != 0 && now - _lastAdjustTick >= SpeedRefreshMinMs
+                      && Math.Abs(speedMs - _speedAtLastAdjust) > SpeedRefreshShare * Math.Max(_speedAtLastAdjust, 1.0);
+            if (refresh) _lastAdjustTick = now; // évite une rafale pendant que la ré-application part
+        }
+        if (refresh) _ = ReapplyAsync();
     }
 
     // ---------- Mode natif Zwift ----------
@@ -478,6 +571,13 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     /// <summary>Active ou désactive le mode natif à chaud (case de l'interface).</summary>
     public async Task SetNativeModeAsync(bool enabled)
     {
+        await _nativeGate.WaitAsync();
+        try { await SetNativeModeCoreAsync(enabled); }
+        finally { _nativeGate.Release(); }
+    }
+
+    private async Task SetNativeModeCoreAsync(bool enabled)
+    {
         NativeZwiftMode = enabled;
         if (enabled && !NativeActive)
         {
@@ -505,6 +605,13 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
     /// </summary>
     public async Task SetShiftingEnabledAsync(bool enabled, bool native)
     {
+        await _nativeGate.WaitAsync();
+        try { await SetShiftingEnabledCoreAsync(enabled, native); }
+        finally { _nativeGate.Release(); }
+    }
+
+    private async Task SetShiftingEnabledCoreAsync(bool enabled, bool native)
+    {
         if (Enabled == enabled) return;
         if (!enabled)
         {
@@ -527,15 +634,23 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         }
         Enabled = true;
         NativeZwiftMode = native;
-        if (native) await SetNativeModeAsync(true);
+        if (native) await SetNativeModeCoreAsync(true);
         await ReapplyAsync();
     }
 
     /// <summary>Après une reconnexion : nouvelle session native, puis le rapport et la simulation en cours.</summary>
     private async Task ReopenNativeAsync()
     {
+        await _nativeGate.WaitAsync();
+        try { await ReopenNativeCoreAsync(); }
+        catch (Exception ex) { Log?.Invoke($"Réouverture du canal natif interrompue : {ex.Message}"); }
+        finally { _nativeGate.Release(); }
+    }
+
+    private async Task ReopenNativeCoreAsync()
+    {
         var n = _native;
-        if (n is null) return;
+        if (n is null || _cts is { IsCancellationRequested: true }) return;
         if (!await n.ReopenAsync())
         {
             Log?.Invoke("Canal natif Zwift non rétabli après la reconnexion : repli sur la mise à l'échelle FTMS.");
@@ -605,23 +720,40 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         if (ch == FtmsCodec.IndoorBikeData)
         {
             if (!_firstSampleLogged) { _firstSampleLogged = true; Log?.Invoke(TrainerReport.DescribeBikeData(value)); }
+            long now = Environment.TickCount64;
             bool hasPower = FtmsCodec.TryGetPowerW(value, out int watts);
-            BikeData.Add(Environment.TickCount64, hasPower ? watts : null);
+            BikeData.Add(now, hasPower ? watts : null);
             bool hasCadence = FtmsCodec.TryGetCadenceRpm(value, out double cadence);
-            lock (_state) { _lastPowerW = hasPower ? watts : null; _lastCadenceRpm = hasCadence ? cadence : null; }
-            if (FtmsCodec.TryGetSpeedMs(value, out var v))
+            // Un trainer peut répartir ses mesures sur plusieurs notifications (bit « More Data ») : chaque champ n'est mis
+            // à jour que s'il est présent, et garde sa dernière valeur sinon (voir LastPowerW, LastCadenceRpm).
+            bool hasSpeed = FtmsCodec.TryGetSpeedMs(value, out var v);
+            RealRatioDetector? detector = null;
+            double cadenceForDetector = 0;
+            bool warn = false;
+            lock (_state)
             {
-                RealRatioDetector? detector;
-                lock (_state) { _lastSpeedMs = v; detector = _detector; }
-                // Mesure du braquet réel en cours : vitesse BRUTE du trainer (avant mise à l'échelle) et cadence (0 si absente).
-                detector?.AddSample(v, FtmsCodec.TryGetCadenceRpm(value, out var rpm) ? rpm : 0);
+                if (hasPower) { _lastPowerW = watts; _lastPowerTick = now; }
+                if (hasCadence)
+                {
+                    _lastCadenceRpm = cadence; _lastCadenceTick = now;
+                    _cadenceFromFragment = (value[0] & 0x01) != 0; // paquet « More Data » : la vitesse suit dans un autre
+                }
+                if (hasSpeed)
+                {
+                    _lastSpeedMs = v;
+                    _packetsWithoutSpeed = 0;
+                    detector = _detector;
+                    // La cadence du même paquet, sinon celle du fragment qui vient de précéder (mesures réparties) ; jamais celle
+                    // d'un paquet complet plus ancien : un trainer qui n'envoie pas de cadence doit être reconnu comme tel.
+                    cadenceForDetector = hasCadence ? cadence
+                        : _cadenceFromFragment && now - _lastCadenceTick <= FieldFreshMs ? _lastCadenceRpm ?? 0 : 0;
+                }
+                else if (++_packetsWithoutSpeed == PacketsBeforeNoSpeedWarning && !_noSpeedWarned) { _noSpeedWarned = true; warn = true; }
             }
-            else
-            {
-                bool warn;
-                lock (_state) { warn = !_noSpeedWarned; _noSpeedWarned = true; }
-                if (warn) Log?.Invoke("Ce trainer n'envoie pas de vitesse instantanée : la pente sera calculée sans terme de traînée.");
-            }
+            // Mesure du braquet réel en cours : vitesse BRUTE du trainer (avant mise à l'échelle) et dernière cadence connue.
+            detector?.AddSample(v, cadenceForDetector);
+            if (warn) Log?.Invoke("Ce trainer n'envoie pas de vitesse instantanée : la pente sera calculée sans terme de traînée.");
+            if (hasSpeed) RefreshForSpeedChange(v, now);
             // Mode natif : le trainer possède le rapport, sa vitesse est laissée telle quelle (à valider sur matériel).
             if (Enabled && !NativeActive && Math.Abs(_model.Factor - 1.0) > 1e-9) value = FtmsCodec.ScaleSpeed(value, _model.Factor);
         }
@@ -631,9 +763,9 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         }
         else if (ch == FtmsCodec.FitnessMachineStatus && Enabled && !NativeActive && value.Length > 0 && value[0] == FtmsCodec.StatusSimulationChanged)
         {
-            // Le statut renverrait à l'appli la pente RÉÉCRITE : on lui rend celle qu'elle a demandée.
+            // Le statut renverrait à l'appli la simulation RÉÉCRITE : on lui rend celle qu'elle a demandée (tous les champs).
             SimulationParams? app; lock (_state) app = _appSim;
-            if (app is { } a) value = FtmsCodec.RewriteStatusGrade(value, a.GradeRaw);
+            if (app is { } a) value = FtmsCodec.RewriteStatusSimulation(value, a);
         }
 
         var packet = DirConPacket.NotificationPacket(ch, value).Encode();
@@ -664,8 +796,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
         var listener = _listener;
         while (!ct.IsCancellationRequested && listener is not null)
         {
-            TcpClient tcp;
-            try { tcp = await listener.AcceptTcpClientAsync(ct); } catch { break; }
+            if (await TcpAccept.NextAsync(listener, ct, m => Log?.Invoke(m)) is not { } tcp) break;
             tcp.NoDelay = true;
             var client = new Client(tcp);
             lock (_lock) _clients.Add(client);
@@ -768,6 +899,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
                 if (IsInjected(ch)) return DirConPacket.Error(p.Id, p.Sequence, DirConResponse.OperationNotSupported);
                 if (ch == FtmsCodec.ControlPoint) return await HandleControlPointWriteAsync(client, p, ch, value);
                 if (ch == FecCodec.Tx && Control == TrainerControl.FeC) return await HandleFecWriteAsync(p, ch, value);
+                WarnIfBypassingShifting(ch);
 
                 try { await _upstream.WriteAsync(ch, value); }
                 catch (Exception) { return DirConPacket.Error(p.Id, p.Sequence, DirConResponse.WriteFailed); }
@@ -825,8 +957,7 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             else if (!isSim && value.Length > 0 && FtmsCodec.IsTargetCommand(value[0])) native.SetSimulationActive(false); // ERG : plus de maintien
         }
 
-        byte[] toTrainer = value;
-        if (Enabled && isSim && !NativeActive) toTrainer = Adjust(value);
+        bool adjust = Enabled && isSim && !NativeActive;
 
         if (!_upstream.IsConnected)
         {
@@ -835,7 +966,8 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
             return DirConPacket.AckResponse(DirConId.WriteCharacteristic, p.Sequence, ch);
         }
 
-        bool sent = await _arbiter.SubmitFromAppAsync(toTrainer);
+        // La pente est réécrite au moment de l'envoi : un changement de rapport pendant l'attente n'est plus perdu.
+        bool sent = await _arbiter.SubmitFromAppAsync(value, adjust ? Adjust : null);
         return sent
             ? DirConPacket.AckResponse(DirConId.WriteCharacteristic, p.Sequence, ch)
             : DirConPacket.Error(p.Id, p.Sequence, DirConResponse.WriteFailed);
@@ -856,9 +988,19 @@ public sealed class DirConTrainerProxy : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await DisposeNativeAsync(release: true); // rend au trainer son virtual shifting (rapport 0)
         _cts?.Cancel();
+        // Attend la fin d'une transition native en cours (borné : l'arrêt de l'appli ne doit pas en dépendre).
+        bool gated = await _nativeGate.WaitAsync(TimeSpan.FromSeconds(2));
+        try { await DisposeNativeAsync(release: true); } // rend au trainer son virtual shifting (rapport 0)
+        finally { if (gated) _nativeGate.Release(); }
         _upstream.Notification -= OnUpstreamNotification;
+        // La liaison peut survivre au proxy (republication pour un nouveau capteur cardio) : plus aucun événement ne doit
+        // atteindre ce proxy libéré.
+        if (_upstream is IReconnectingLink rl)
+        {
+            rl.Dropped -= OnUpstreamDropped;
+            rl.Reconnected -= OnUpstreamReconnected;
+        }
         if (HeartRate is { } hr) hr.Measurement -= OnHeartRateMeasurement;
         _arbiter?.Dispose();
         _mdns.Dispose();

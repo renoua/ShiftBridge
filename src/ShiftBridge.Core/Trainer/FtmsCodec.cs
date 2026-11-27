@@ -31,6 +31,26 @@ public static class FtmsCodec
         opcode is OpSetTargetSpeed or OpSetTargetInclination or OpSetTargetResistance or OpSetTargetPower
             or OpSetTargetHeartRate or OpSetSimulation;
 
+    /// <summary>
+    /// Remplace tous les paramètres du statut 0x12 (vent, pente, roulement, traînée) par ceux que l'APPLI a demandés : en mise
+    /// à l'échelle complète, le proxy réécrit aussi le roulement et la traînée, que l'appli ne doit pas voir revenir modifiés.
+    /// </summary>
+    public static byte[] RewriteStatusSimulation(ReadOnlySpan<byte> status, SimulationParams app)
+    {
+        var copy = status.ToArray();
+        if (copy.Length >= 7 && copy[0] == StatusSimulationChanged)
+        {
+            short wind = app.WindRaw;
+            copy[1] = (byte)(wind & 0xFF);
+            copy[2] = (byte)((wind >> 8) & 0xFF);
+            copy[3] = (byte)(app.GradeRaw & 0xFF);
+            copy[4] = (byte)((app.GradeRaw >> 8) & 0xFF);
+            copy[5] = app.CrrRaw;
+            copy[6] = app.CwRaw;
+        }
+        return copy;
+    }
+
     /// <summary>Remplace la pente du statut 0x12 par celle que l'APPLI a demandée (elle ne doit pas voir la pente réécrite).</summary>
     public static byte[] RewriteStatusGrade(ReadOnlySpan<byte> status, short appGradeRaw)
     {

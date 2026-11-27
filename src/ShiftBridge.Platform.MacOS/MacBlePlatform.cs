@@ -96,7 +96,15 @@ public sealed class MacBlePlatform : IBlePlatform, IBleCentral, IAsyncDisposable
         return completion.Task;
     }
 
-    internal void Cancel(CBPeripheral peripheral) => _manager.CancelPeripheralConnection(peripheral);
+    /// <summary>
+    /// Ferme la liaison et oublie aussitôt l'appareil : CoreBluetooth n'envoie pas toujours de « déconnecté » pour une connexion
+    /// annulée avant d'aboutir, et l'entrée restée dans la table rendait l'appareil « occupé » jusqu'au redémarrage.
+    /// </summary>
+    internal void Cancel(CBPeripheral peripheral)
+    {
+        _connections.Remove(PeerId(peripheral));
+        _manager.CancelPeripheralConnection(peripheral);
+    }
 
     private void EnsureAvailable()
     {

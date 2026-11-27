@@ -157,8 +157,11 @@ public sealed class WindowsLocalInputProvider : ILocalInputProvider
             // XInputPoller n'a pas de pause : on le recrée à la prochaine activation.
             if (_xinput is not null)
             {
-                _xinput.Dispose();
+                // Arrêt hors de ce thread : il porte aussi le hook clavier, et Windows retire sans prévenir un hook qui ne
+                // répond pas à temps (toutes les touches du système attendent pendant ce temps).
+                var old = _xinput;
                 _xinput = new XInputPoller(_aggregator, Enqueue, RefreshDevices, m => Log?.Invoke(m));
+                _ = Task.Run(old.Dispose);
             }
         }
         RefreshDevices();
@@ -220,7 +223,8 @@ public sealed class WindowsLocalInputProvider : ILocalInputProvider
             list.AddRange(_joysticks?.Devices ?? []);
         }
         lock (_devicesLock) _devices = [.. list];
-        DevicesChanged?.Invoke();
+        // Levé hors du thread du hook clavier (voir Apply) : l'interface peut y faire autant de travail qu'elle veut.
+        ThreadPool.QueueUserWorkItem(_ => DevicesChanged?.Invoke());
     }
 
     // ---------- Arrêt ----------

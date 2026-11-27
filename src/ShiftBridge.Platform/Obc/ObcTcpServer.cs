@@ -107,9 +107,7 @@ public sealed class ObcTcpServer : IObcTransport
         var listener = _listener;
         while (!ct.IsCancellationRequested && listener is not null)
         {
-            TcpClient tcp;
-            try { tcp = await listener.AcceptTcpClientAsync(ct); }
-            catch { break; }
+            if (await TcpAccept.NextAsync(listener, ct, m => Log?.Invoke(m)) is not { } tcp) break;
 
             tcp.NoDelay = true; // les appuis de boutons doivent partir immédiatement
             var conn = new ClientConn(tcp);

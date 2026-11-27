@@ -140,8 +140,9 @@ public sealed class BleButtonController : IController
                 SetState(ControllerState.Error);
             }
 
-            ReleaseAllButtons();
+            // Liaison fermée D'ABORD : une trame arrivée entre les deux ne peut plus remettre une touche enfoncée.
             await CleanupAsync();
+            ReleaseAllButtons();
             if (!AutoReconnect || ct.IsCancellationRequested) break;
             SetState(ControllerState.Disconnected);
 
@@ -203,7 +204,10 @@ public sealed class BleButtonController : IController
             {
                 while (!ct.IsCancellationRequested && polling.PollFrames.Count > 0)
                 {
-                    await Task.Delay(polling.PollInterval, ct);
+                    // Erreurs de décodage répétées (code PIN refusé) : inutile d'interroger 4 fois par seconde un groupe qui
+                    // refuse, on espace à 5 s jusqu'à la prochaine réponse valide.
+                    var interval = Volatile.Read(ref _consecutiveDecodeErrors) >= 3 ? SlowPollInterval : polling.PollInterval;
+                    await Task.Delay(interval, ct);
                     await WriteAsync(polling.PollFrames[i++ % polling.PollFrames.Count]);
                 }
             }
@@ -255,7 +259,7 @@ public sealed class BleButtonController : IController
                 try
                 {
                     byte[] b = await connection.ReadAsync(BatteryService, BatteryLevel);
-                    if (b.Length > 0) { BatteryPercent = b[0]; BatteryChanged?.Invoke(b[0]); }
+                    if (b.Length > 0 && b[0] <= 100) { BatteryPercent = b[0]; BatteryChanged?.Invoke(b[0]); }
                 }
                 catch { /* la batterie n'est pas critique */ }
             }
@@ -279,25 +283,30 @@ public sealed class BleButtonController : IController
     {
         if (!_spec.Characteristics.Contains(characteristic)) return;
         _frameCount++;
-        string hex = Convert.ToHexString(data);
         DecodedFrame? frame;
         try { frame = _decoder.Decode(characteristic, data); }
         catch (Exception ex)
         {
+            Interlocked.Increment(ref _consecutiveDecodeErrors);
             // Une même erreur (p. ex. mauvais code PIN, répétée à chaque interrogation) n'est journalisée qu'une fois.
-            if (_lastDecodeError != ex.Message) { _lastDecodeError = ex.Message; Log?.Invoke($"{Info.Name} : {ex.Message} ({hex})"); }
+            if (_lastDecodeError != ex.Message) { _lastDecodeError = ex.Message; Log?.Invoke($"{Info.Name} : {ex.Message} ({Convert.ToHexString(data)})"); }
             return;
         }
+        Interlocked.Exchange(ref _consecutiveDecodeErrors, 0);
 
         if (frame is null)
         {
-            Frame?.Invoke($"{Info.Name} < {hex} (non reconnue)");
+            Frame?.Invoke($"{Info.Name} < {Convert.ToHexString(data)} (non reconnue)");
             return;
         }
-        Process(frame, hex);
+        Process(frame, data);
     }
 
-    private void Process(DecodedFrame frame, string? hex)
+    private int _consecutiveDecodeErrors;
+    private static readonly TimeSpan SlowPollInterval = TimeSpan.FromSeconds(5);
+
+    /// <param name="raw">Trame brute (null pour une trame différée, déjà journalisée) : l'hexadécimal n'est construit que s'il est journalisé.</param>
+    private void Process(DecodedFrame frame, byte[]? raw)
     {
         List<ButtonEvent> events = [];
         if (frame.Held is { } held)
@@ -307,12 +316,12 @@ public sealed class BleButtonController : IController
         }
         var taps = frame.Taps.Select(n => ButtonKey.Controller(Info.Kind, n)).ToList();
 
-        if (hex is not null && (VerboseFrames || events.Count > 0 || taps.Count > 0 || _frameCount == 1))
-            Frame?.Invoke($"{Info.Name} < {hex}");
-        else if (hex is null && taps.Count > 0)
+        if (raw is not null && (VerboseFrames || events.Count > 0 || taps.Count > 0 || _frameCount == 1))
+            Frame?.Invoke($"{Info.Name} < {Convert.ToHexString(raw)}");
+        else if (raw is null && taps.Count > 0)
             Frame?.Invoke($"{Info.Name} : {string.Join(", ", frame.Taps)}{(frame.Detail is { } detail ? $" ({detail})" : "")}");
 
-        if (frame.BatteryPercent is { } pct) { BatteryPercent = pct; BatteryChanged?.Invoke(pct); }
+        if (frame.BatteryPercent is { } pct and >= 0 and <= 100) { BatteryPercent = pct; BatteryChanged?.Invoke(pct); }
         if (events.Count > 0) ButtonEvents?.Invoke(events);
         if (taps.Count > 0) _ = EmitTapsAsync(taps);
     }

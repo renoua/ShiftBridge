@@ -194,6 +194,11 @@ public sealed partial class DeviceRowViewModel : ObservableObject
     public int? BatteryPercent => Controller?.BatteryPercent;
     public bool HasBattery => BatteryPercent.HasValue;
 
+    /// <summary>Vrai si les deux lignes affichent exactement la même chose (la liste n'a alors pas à remplacer la ligne).</summary>
+    public bool ShowsSameAs(DeviceRowViewModel other) =>
+        Device == other.Device && ReferenceEquals(Controller, other.Controller) && CustomName == other.CustomName
+        && State == other.State && BatteryPercent == other.BatteryPercent && Controller?.FirmwareVersion == other.Controller?.FirmwareVersion;
+
     public UiState State => Controller?.State switch
     {
         null => UiState.Off,

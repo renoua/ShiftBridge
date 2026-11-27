@@ -65,11 +65,25 @@ public static class TrainerReport
                (speed ? $"présente : {ms * 3.6:0.0} km/h)" : "absente)");
     }
 
-    private static string Short(Guid g)
+    private static string Short(Guid g) => ShortUuid(g);
+
+    /// <summary>« 0x1826 » pour un UUID 16 bits du Bluetooth SIG, l'UUID complet sinon.</summary>
+    public static string ShortUuid(Guid g, bool upper = true)
     {
         var s = g.ToString();
-        return s.StartsWith("0000", StringComparison.Ordinal) && s.EndsWith("-0000-1000-8000-00805f9b34fb", StringComparison.Ordinal)
-            ? "0x" + s.Substring(4, 4).ToUpperInvariant() : s;
+        if (!s.StartsWith("0000", StringComparison.Ordinal) || !s.EndsWith("-0000-1000-8000-00805f9b34fb", StringComparison.Ordinal)) return s;
+        var hex = s.Substring(4, 4);
+        return "0x" + (upper ? hex.ToUpperInvariant() : hex);
+    }
+
+    /// <summary>Lit « 0x1826 », « 1826 » ou un UUID complet ; null si le texte n'est pas un UUID.</summary>
+    public static Guid? TryParseUuid(string text)
+    {
+        text = text.Trim();
+        if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) text = text[2..];
+        if (text.Length == 4 && ushort.TryParse(text, System.Globalization.NumberStyles.HexNumber, null, out var short16))
+            return new Guid($"0000{short16:x4}-0000-1000-8000-00805f9b34fb");
+        return Guid.TryParse(text, out var g) ? g : null;
     }
 
     private static string Props(byte p)

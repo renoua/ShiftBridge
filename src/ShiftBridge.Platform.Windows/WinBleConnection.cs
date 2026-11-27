@@ -9,20 +9,27 @@ namespace ShiftBridge.Platform.Windows;
 
 internal sealed class WinBleCentral : IBleCentral
 {
+    /// <summary>
+    /// Délai par défaut de chaque opération GATT, comme sous Android et macOS : sans lui, un appel WinRT qui ne revient jamais
+    /// bloquait la connexion, et « Déconnecter » attendait indéfiniment.
+    /// </summary>
+    internal static readonly TimeSpan DefaultOperationTimeout = TimeSpan.FromSeconds(15);
+
     public async Task<IBleConnection> ConnectAsync(BleDeviceId address, BleConnectOptions options, CancellationToken ct = default)
     {
         if (address.MacAddress is not { } mac) throw new BleDeviceNotFoundException(Strings.Err_BtBadAddress);
+        var timeout = options.OperationTimeout ?? DefaultOperationTimeout;
         var device = await WinBleConnection.With(BluetoothLEDevice.FromBluetoothAddressAsync(mac).AsTask(ct),
-            options.OperationTimeout, "ouverture de l'appareil");
+            timeout, "ouverture de l'appareil");
         if (device is null) throw new BleDeviceNotFoundException(Strings.Err_BleDeviceNotFound);
 
         try
         {
             // Maintient la liaison active : sans cela Windows peut la couper entre deux échanges.
             var session = await WinBleConnection.With(GattSession.FromDeviceIdAsync(device.BluetoothDeviceId).AsTask(ct),
-                options.OperationTimeout, "ouverture de la session GATT");
+                timeout, "ouverture de la session GATT");
             session.MaintainConnection = true;
-            return new WinBleConnection(device, session, options.OperationTimeout);
+            return new WinBleConnection(device, session, timeout);
         }
         catch
         {
@@ -47,6 +54,13 @@ internal sealed class WinBleConnection : IBleConnection
     private readonly Dictionary<(Guid Service, Guid Char), GattCharacteristic> _chars = [];
     private readonly Dictionary<(Guid Service, Guid Char), TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs>> _listening = [];
     private readonly List<object> _keepAlive = []; // GattCharacteristicsResult conservés volontairement
+    /// <summary>
+    /// Protège les tables ci-dessus : une découverte (lecture batterie en arrière-plan) peut tourner pendant qu'une boucle
+    /// d'interrogation (L-TWOO) ou une vibration cherche sa caractéristique. Android et macOS sérialisent déjà leurs opérations.
+    /// </summary>
+    private readonly object _lock = new();
+    /// <summary>Une découverte à la fois : deux découvertes simultanées interrogeraient deux fois le même service.</summary>
+    private readonly SemaphoreSlim _discoverGate = new(1, 1);
     private GattDeviceServicesResult? _all;
     private bool _disposed;
     private int _disconnectRaised;
@@ -68,37 +82,48 @@ internal sealed class WinBleConnection : IBleConnection
     public async Task<IReadOnlyList<BleServiceInfo>> DiscoverAsync(Func<Guid, bool>? serviceFilter = null, bool strict = false, CancellationToken ct = default)
     {
         ThrowIfClosed();
-        if (_all is null)
+        await _discoverGate.WaitAsync(ct);
+        try
         {
-            var all = await With(_device.GetGattServicesAsync(BluetoothCacheMode.Uncached).AsTask(ct), _timeout, Strings.Op_DiscoverServices);
-            if (all.Status != GattCommunicationStatus.Success)
-                throw new IOException(Describe(Strings.Op_GattServicesUnavailable, all.Status, all.ProtocolError));
-            _all = all;
-        }
-
-        var result = new List<BleServiceInfo>();
-        foreach (var svc in _all.Services)
-        {
-            if (serviceFilter is not null && !serviceFilter(svc.Uuid)) continue;
-            if (!_infos.TryGetValue(svc.Uuid, out var info))
+            if (_all is null)
             {
-                var cr = await With(svc.GetCharacteristicsAsync(BluetoothCacheMode.Uncached).AsTask(ct), _timeout, Loc.Fmt(Strings.Op_CharsOf, svc.Uuid));
-                if (cr.Status != GattCommunicationStatus.Success)
-                {
-                    if (strict) throw new IOException(Describe(Loc.Fmt(Strings.Op_CharsUnavailable, svc.Uuid), cr.Status, cr.ProtocolError));
-                    Log?.Invoke($"Service {svc.Uuid} ignoré ({cr.Status})");
-                    continue;
-                }
-                _keepAlive.Add(cr);
-                _services[svc.Uuid] = svc;
-                foreach (var c in cr.Characteristics) _chars[(svc.Uuid, c.Uuid)] = c;
-                info = new BleServiceInfo(svc.Uuid,
-                    [.. cr.Characteristics.Select(c => new BleCharacteristicInfo(c.Uuid, (uint)c.CharacteristicProperties))]);
-                _infos[svc.Uuid] = info;
+                var all = await With(_device.GetGattServicesAsync(BluetoothCacheMode.Uncached).AsTask(ct), _timeout, Strings.Op_DiscoverServices);
+                if (all.Status != GattCommunicationStatus.Success)
+                    throw new IOException(Describe(Strings.Op_GattServicesUnavailable, all.Status, all.ProtocolError));
+                lock (_lock) _all = all;
             }
-            result.Add(info);
+
+            var result = new List<BleServiceInfo>();
+            foreach (var svc in _all.Services)
+            {
+                if (serviceFilter is not null && !serviceFilter(svc.Uuid)) continue;
+                BleServiceInfo? info;
+                lock (_lock) _infos.TryGetValue(svc.Uuid, out info);
+                if (info is null)
+                {
+                    var cr = await With(svc.GetCharacteristicsAsync(BluetoothCacheMode.Uncached).AsTask(ct), _timeout, Loc.Fmt(Strings.Op_CharsOf, svc.Uuid));
+                    if (cr.Status != GattCommunicationStatus.Success)
+                    {
+                        if (strict) throw new IOException(Describe(Loc.Fmt(Strings.Op_CharsUnavailable, svc.Uuid), cr.Status, cr.ProtocolError));
+                        Log?.Invoke($"Service {svc.Uuid} ignoré ({cr.Status})");
+                        continue;
+                    }
+                    info = new BleServiceInfo(svc.Uuid,
+                        [.. cr.Characteristics.Select(c => new BleCharacteristicInfo(c.Uuid, (uint)c.CharacteristicProperties))]);
+                    lock (_lock)
+                    {
+                        if (_disposed) throw new IOException(Strings.Err_LinkClosed);
+                        _keepAlive.Add(cr);
+                        _services[svc.Uuid] = svc;
+                        foreach (var c in cr.Characteristics) _chars[(svc.Uuid, c.Uuid)] = c;
+                        _infos[svc.Uuid] = info;
+                    }
+                }
+                result.Add(info);
+            }
+            return result;
         }
-        return result;
+        finally { _discoverGate.Release(); }
     }
 
     public async Task<byte[]> ReadAsync(Guid service, Guid characteristic)
@@ -125,15 +150,16 @@ internal sealed class WinBleConnection : IBleConnection
         var key = (service, characteristic);
 
         // Le gestionnaire est posé AVANT d'activer les notifications pour ne perdre aucune trame.
-        if (mode != BleNotifyMode.None && !_listening.ContainsKey(key))
+        if (mode != BleNotifyMode.None)
         {
             TypedEventHandler<GattCharacteristic, GattValueChangedEventArgs> handler = (_, args) =>
             {
                 CryptographicBuffer.CopyToByteArray(args.CharacteristicValue, out byte[] data);
                 ValueChanged?.Invoke(service, characteristic, data);
             };
-            _listening[key] = handler;
-            ch.ValueChanged += handler;
+            bool added;
+            lock (_lock) added = _listening.TryAdd(key, handler);
+            if (added) ch.ValueChanged += handler;
         }
 
         var value = mode switch
@@ -151,8 +177,9 @@ internal sealed class WinBleConnection : IBleConnection
     private GattCharacteristic Find(Guid service, Guid characteristic)
     {
         ThrowIfClosed();
-        return _chars.TryGetValue((service, characteristic), out var c)
-            ? c : throw new IOException(Loc.Fmt(Strings.Err_UnknownCharacteristic, characteristic));
+        GattCharacteristic? c;
+        lock (_lock) _chars.TryGetValue((service, characteristic), out c);
+        return c ?? throw new IOException(Loc.Fmt(Strings.Err_UnknownCharacteristic, characteristic));
     }
 
     private void ThrowIfClosed()
@@ -184,15 +211,18 @@ internal sealed class WinBleConnection : IBleConnection
 
     public ValueTask DisposeAsync()
     {
-        if (_disposed) return ValueTask.CompletedTask;
-        _disposed = true;
-        _device.ConnectionStatusChanged -= OnConnectionStatusChanged;
-        foreach (var (key, handler) in _listening)
-            if (_chars.TryGetValue(key, out var c)) c.ValueChanged -= handler;
-        if (_all is not null)
-            foreach (var s in _all.Services) { try { s.Dispose(); } catch { } }
-        _services.Clear(); _chars.Clear(); _listening.Clear(); _keepAlive.Clear(); _infos.Clear();
-        _all = null;
+        lock (_lock)
+        {
+            if (_disposed) return ValueTask.CompletedTask;
+            _disposed = true;
+            _device.ConnectionStatusChanged -= OnConnectionStatusChanged;
+            foreach (var (key, handler) in _listening)
+                if (_chars.TryGetValue(key, out var c)) c.ValueChanged -= handler;
+            if (_all is not null)
+                foreach (var s in _all.Services) { try { s.Dispose(); } catch { } }
+            _services.Clear(); _chars.Clear(); _listening.Clear(); _keepAlive.Clear(); _infos.Clear();
+            _all = null;
+        }
         try { _session.Dispose(); } catch { }
         try { _device.Dispose(); } catch { }
         return ValueTask.CompletedTask;

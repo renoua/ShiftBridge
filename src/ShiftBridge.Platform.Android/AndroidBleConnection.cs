@@ -48,8 +48,7 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
     private readonly Dictionary<Guid, BleServiceInfo> _infos = [];
     private BluetoothGatt? _gatt;
     private TaskCompletionSource<bool>? _connect;
-    private TaskCompletionSource<GattStatus>? _op;
-    private byte[]? _readValue;
+    private PendingOp? _op;
     private volatile bool _connected;
     private volatile bool _disposed;
     private bool _discovered;
@@ -87,9 +86,10 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
             catch (TimeoutException) { throw new BleDeviceNotFoundException(Strings.Err_ConnectTimeout); }
         }
 
-        // Priorité haute : intervalle de connexion court (latence des boutons) ; MTU large (App Info, trames Zwift).
+        // Priorité haute pour toutes les liaisons (pas seulement quand BleConnectOptions.HighPriority est demandé) :
+        // intervalle de connexion court = latence des boutons minimale ; MTU large (App Info, trames Zwift).
         try { _gatt.RequestConnectionPriority(GattConnectionPriority.High); } catch { /* optionnel */ }
-        try { await RunAsync(() => _gatt!.RequestMtu(PreferredMtu), Strings.Op_NegotiateMtu); }
+        try { await RunAsync(OpKind.Mtu, null, () => _gatt!.RequestMtu(PreferredMtu), Strings.Op_NegotiateMtu); }
         catch (IOException) { /* certains appareils ne répondent pas : le MTU par défaut convient */ }
     }
 
@@ -99,7 +99,7 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
         if (!_discovered)
         {
             RefreshCache(_gatt!);
-            var status = await RunAsync(() => _gatt!.DiscoverServices(), Strings.Op_DiscoverServices);
+            var (status, _) = await RunAsync(OpKind.Discover, null, () => _gatt!.DiscoverServices(), Strings.Op_DiscoverServices);
             if (status != GattStatus.Success) throw new IOException(Loc.Fmt(Strings.Err_GattServicesStatus, (int)status));
             _discovered = true;
         }
@@ -123,17 +123,18 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
     public async Task<byte[]> ReadAsync(Guid service, Guid characteristic)
     {
         var ch = Find(service, characteristic);
-        _readValue = null;
-        var status = await RunAsync(() => _gatt!.ReadCharacteristic(ch), Loc.Fmt(Strings.Op_Read, characteristic));
+        // La valeur revient avec l'opération elle-même (et non par un champ partagé) : deux lectures successives ne
+        // peuvent plus s'écraser l'une l'autre.
+        var (status, value) = await RunAsync(OpKind.Read, characteristic, () => _gatt!.ReadCharacteristic(ch), Loc.Fmt(Strings.Op_Read, characteristic));
         if (status != GattStatus.Success) throw new IOException(Loc.Fmt(Strings.Err_ReadStatus, (int)status));
-        return _readValue ?? [];
+        return value ?? [];
     }
 
     public async Task WriteAsync(Guid service, Guid characteristic, byte[] value, bool withResponse)
     {
         var ch = Find(service, characteristic);
         var type = withResponse ? GattWriteType.Default : GattWriteType.NoResponse;
-        var status = await RunAsync(() => WriteCharacteristic(ch, value, type), Loc.Fmt(Strings.Op_Write, characteristic));
+        var (status, _) = await RunAsync(OpKind.Write, characteristic, () => WriteCharacteristic(ch, value, type), Loc.Fmt(Strings.Op_Write, characteristic));
         if (status != GattStatus.Success) throw new IOException(Loc.Fmt(Strings.Err_WriteStatus, (int)status));
     }
 
@@ -152,7 +153,7 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
             BleNotifyMode.Indicate => [0x02, 0x00],
             _ => [0x00, 0x00],
         };
-        var status = await RunAsync(() => WriteDescriptor(cccd, value), Loc.Fmt(Strings.Op_Subscribe, characteristic));
+        var (status, _) = await RunAsync(OpKind.DescriptorWrite, characteristic, () => WriteDescriptor(cccd, value), Loc.Fmt(Strings.Op_Subscribe, characteristic));
         if (status != GattStatus.Success) throw new IOException(Loc.Fmt(Strings.Err_SubscribeStatus, (int)status));
     }
 
@@ -192,21 +193,43 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
 
     // ---------- Sérialisation des opérations ----------
 
-    private async Task<GattStatus> RunAsync(Func<bool> start, string what)
+    private enum OpKind { Discover, Mtu, Read, Write, DescriptorWrite }
+
+    /// <summary>
+    /// L'opération en vol, avec ce qu'elle attend : un rappel d'un autre type (échange de MTU lancé par l'appareil, rappel
+    /// tardif d'une opération expirée) ne la termine plus par erreur.
+    /// </summary>
+    private sealed class PendingOp(OpKind kind, Guid? characteristic)
+    {
+        public TaskCompletionSource<(GattStatus Status, byte[]? Value)> Done { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Matches(OpKind k, Guid? c) => kind == k && (characteristic is null || c is null || characteristic == c);
+    }
+
+    /// <summary>Délai supplémentaire accordé au rappel d'une opération expirée avant de passer à la suivante.</summary>
+    private static readonly TimeSpan LateCallbackGrace = TimeSpan.FromSeconds(2);
+
+    private async Task<(GattStatus Status, byte[]? Value)> RunAsync(OpKind kind, Guid? characteristic, Func<bool> start, string what)
     {
         ThrowIfClosed();
         await _gate.WaitAsync();
         try
         {
             ThrowIfClosed();
-            var tcs = new TaskCompletionSource<GattStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _op = tcs;
+            var op = new PendingOp(kind, characteristic);
+            _op = op;
             bool started;
             try { started = start(); }
             catch (Java.Lang.SecurityException) { throw new IOException(Strings.Err_PermConnect); }
             if (!started) throw new IOException(Loc.Fmt(Strings.Err_OpRefused, what));
-            try { return await tcs.Task.WaitAsync(_timeout); }
-            catch (TimeoutException) { throw new IOException(Loc.Fmt(Strings.Err_Timeout, what)); }
+            try { return await op.Done.Task.WaitAsync(_timeout); }
+            catch (TimeoutException)
+            {
+                // Android garde la requête en vol : lancer la suivante tout de suite la ferait refuser (« occupé ») ou lui
+                // ferait recevoir ce rappel tardif. On laisse un court délai à ce rappel pour arriver et être absorbé ici.
+                try { await op.Done.Task.WaitAsync(LateCallbackGrace); } catch { /* toujours rien : on passe à la suite */ }
+                throw new IOException(Loc.Fmt(Strings.Err_Timeout, what));
+            }
         }
         finally
         {
@@ -214,6 +237,15 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
             _gate.Release();
         }
     }
+
+    private void Complete(OpKind kind, Guid? characteristic, GattStatus status, byte[]? value = null)
+    {
+        var op = _op;
+        if (op is not null && op.Matches(kind, characteristic)) op.Done.TrySetResult((status, value));
+    }
+
+    private static Guid? CharUuid(BluetoothGattCharacteristic? characteristic) =>
+        characteristic?.Uuid is { } u ? AndroidBle.ToGuid(u) : null;
 
     private BluetoothGattCharacteristic Find(Guid service, Guid characteristic)
     {
@@ -242,28 +274,24 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
         bool wasConnected = _connected;
         _connected = false;
         _connect?.TrySetException(new BleDeviceNotFoundException(Loc.Fmt(Strings.Err_ConnectStatus, (int)status)));
-        _op?.TrySetException(new IOException(Strings.Err_LinkLost));
+        _op?.Done.TrySetException(new IOException(Strings.Err_LinkLost));
         if (wasConnected && !_disposed && Interlocked.Exchange(ref _disconnectRaised, 1) == 0) Disconnected?.Invoke();
     }
 
-    public override void OnServicesDiscovered(BluetoothGatt? gatt, GattStatus status) => _op?.TrySetResult(status);
-    public override void OnMtuChanged(BluetoothGatt? gatt, int mtu, GattStatus status) => _op?.TrySetResult(status);
-    public override void OnCharacteristicWrite(BluetoothGatt? gatt, BluetoothGattCharacteristic? characteristic, GattStatus status) => _op?.TrySetResult(status);
-    public override void OnDescriptorWrite(BluetoothGatt? gatt, BluetoothGattDescriptor? descriptor, GattStatus status) => _op?.TrySetResult(status);
+    public override void OnServicesDiscovered(BluetoothGatt? gatt, GattStatus status) => Complete(OpKind.Discover, null, status);
+    public override void OnMtuChanged(BluetoothGatt? gatt, int mtu, GattStatus status) => Complete(OpKind.Mtu, null, status);
+    public override void OnCharacteristicWrite(BluetoothGatt? gatt, BluetoothGattCharacteristic? characteristic, GattStatus status) =>
+        Complete(OpKind.Write, CharUuid(characteristic), status);
+    public override void OnDescriptorWrite(BluetoothGatt? gatt, BluetoothGattDescriptor? descriptor, GattStatus status) =>
+        Complete(OpKind.DescriptorWrite, CharUuid(descriptor?.Characteristic), status);
 
     [SupportedOSPlatform("android33.0")]
-    public override void OnCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value, GattStatus status)
-    {
-        _readValue = value;
-        _op?.TrySetResult(status);
-    }
+    public override void OnCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, byte[] value, GattStatus status) =>
+        Complete(OpKind.Read, CharUuid(characteristic), status, value);
 
 #pragma warning disable CA1422 // surcharge pour Android < 13 : le système n'appelle que l'une des deux
-    public override void OnCharacteristicRead(BluetoothGatt? gatt, BluetoothGattCharacteristic? characteristic, GattStatus status)
-    {
-        _readValue = characteristic?.GetValue();
-        _op?.TrySetResult(status);
-    }
+    public override void OnCharacteristicRead(BluetoothGatt? gatt, BluetoothGattCharacteristic? characteristic, GattStatus status) =>
+        Complete(OpKind.Read, CharUuid(characteristic), status, characteristic?.GetValue());
 
     public override void OnCharacteristicChanged(BluetoothGatt? gatt, BluetoothGattCharacteristic? characteristic)
     {
@@ -286,7 +314,7 @@ internal sealed class AndroidBleConnection : BluetoothGattCallback, IBleConnecti
         if (_disposed) return ValueTask.CompletedTask;
         _disposed = true;
         _connect?.TrySetCanceled();
-        _op?.TrySetException(new IOException(Strings.Err_LinkClosed));
+        _op?.Done.TrySetException(new IOException(Strings.Err_LinkClosed));
         var gatt = _gatt;
         _gatt = null;
         // Disconnect() puis Close() : sans Close(), l'emplacement GATT fuit et les connexions suivantes échouent (statut 133).

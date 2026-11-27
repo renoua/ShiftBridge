@@ -24,3 +24,31 @@ internal static class TcpSend
         }
     }
 }
+
+/// <summary>
+/// Attente de la connexion suivante d'un serveur TCP. Avant, toute exception arrêtait l'écoute pour de bon (alors que mDNS
+/// continuait d'annoncer le serveur) : une erreur passagère (connexion réinitialisée pendant la poignée de main…) est
+/// maintenant journalisée et l'écoute continue ; seuls l'arrêt du serveur et l'annulation y mettent fin.
+/// </summary>
+internal static class TcpAccept
+{
+    /// <returns>Le client accepté, ou null quand l'écoute doit s'arrêter.</returns>
+    public static async Task<TcpClient?> NextAsync(TcpListener listener, CancellationToken ct, Action<string>? log)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try { return await listener.AcceptTcpClientAsync(ct); }
+            catch (OperationCanceledException) { return null; }
+            catch (ObjectDisposedException) { return null; }
+            catch (InvalidOperationException) { return null; } // écouteur arrêté
+            catch (SocketException ex) when (ex.SocketErrorCode is SocketError.OperationAborted or SocketError.Interrupted
+                                                 or SocketError.NotSocket or SocketError.Shutdown) { return null; }
+            catch (Exception ex)
+            {
+                log?.Invoke($"Connexion entrante refusée ({ex.Message}) : l'écoute continue.");
+                try { await Task.Delay(200, ct); } catch (OperationCanceledException) { return null; }
+            }
+        }
+        return null;
+    }
+}

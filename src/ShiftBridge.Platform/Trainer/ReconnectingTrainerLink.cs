@@ -79,7 +79,14 @@ public sealed class ReconnectingTrainerLink : IReconnectingLink
         return result;
     }
 
-    public Task<byte[]> ReadAsync(Guid characteristic) => Current().ReadAsync(characteristic);
+    public async Task<byte[]> ReadAsync(Guid characteristic)
+    {
+        var value = await Current().ReadAsync(characteristic);
+        _probe ??= characteristic; // une caractéristique lisible : sert à vérifier qu'un trainer silencieux est encore là
+        return value;
+    }
+
+    private Guid? _probe;
     public Task WriteAsync(Guid characteristic, byte[] value) => Current().WriteAsync(characteristic, value);
 
     public async Task EnableNotificationsAsync(Guid characteristic, bool enable = true)
@@ -138,12 +145,31 @@ public sealed class ReconnectingTrainerLink : IReconnectingLink
             while (!_cts.IsCancellationRequested)
             {
                 await Task.Delay(period, _cts.Token);
-                bool watch; lock (_lock) watch = State == LinkState.Connected && _subscribed.Count > 0;
-                if (watch && Environment.TickCount64 - Interlocked.Read(ref _lastNotificationTick) > _silenceTimeout.TotalMilliseconds)
-                    BeginReconnect($"aucune notification depuis {_silenceTimeout.TotalSeconds:0} s");
+                bool watch; ITrainerLink? inner;
+                lock (_lock) { watch = State == LinkState.Connected && _subscribed.Count > 0; inner = _inner; }
+                if (!watch || Environment.TickCount64 - Interlocked.Read(ref _lastNotificationTick) <= _silenceTimeout.TotalMilliseconds)
+                    continue;
+                // Silence : un trainer à l'arrêt ou en veille peut cesser d'envoyer sans être perdu. Une lecture qui répond
+                // prouve que la liaison vit : on ne la coupe pas (ce qui ferait perdre le contrôle FTMS à l'appli).
+                if (_probe is { } probe && inner is not null && await ProbeAsync(inner, probe))
+                {
+                    Interlocked.Exchange(ref _lastNotificationTick, Environment.TickCount64);
+                    continue;
+                }
+                BeginReconnect($"aucune notification depuis {_silenceTimeout.TotalSeconds:0} s");
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    private async Task<bool> ProbeAsync(ITrainerLink inner, Guid characteristic)
+    {
+        try
+        {
+            await inner.ReadAsync(characteristic).WaitAsync(TimeSpan.FromMilliseconds(Math.Max(500, _silenceTimeout.TotalMilliseconds / 4)), _cts.Token);
+            return true;
+        }
+        catch { return false; }
     }
 
     private void BeginReconnect(string reason)
@@ -193,6 +219,8 @@ public sealed class ReconnectingTrainerLink : IReconnectingLink
                 SetState(LinkState.Connected);
                 Log?.Invoke($"Trainer reconnecté (reconnexion n°{ReconnectCount})");
                 Reconnected?.Invoke();
+                // Coupure survenue pendant que _reconnecting était encore vrai : son signal a été ignoré, on la traite ici.
+                if (!next.IsConnected) BeginReconnect("liaison perdue juste après la reconnexion");
                 return;
             }
             catch (OperationCanceledException) { return; }

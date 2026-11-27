@@ -19,7 +19,7 @@ public sealed class ObcBlePeripheral : IObcTransport
     private GattLocalCharacteristic? _batteryLevel;
     private byte[] _lastButtonState = [ObcMessages.TypeButtonState];
     private byte _batteryValue = 100;
-    private readonly Dictionary<string, ObcStreamParser> _parsers = [];
+    private readonly ObcAppInfoReassembler _appInfo = new();
 
     public string Name => "OBC Bluetooth";
     public bool HasClient => _buttonState?.SubscribedClients.Count > 0;
@@ -66,7 +66,12 @@ public sealed class ObcBlePeripheral : IObcTransport
             GattCharacteristicProperties.Write | GattCharacteristicProperties.WriteWithoutResponse);
 
         _buttonState.ReadRequested += OnButtonStateRead;
-        _buttonState.SubscribedClientsChanged += (_, _) => { Log?.Invoke($"OBC BLE : {_buttonState.SubscribedClients.Count} abonné(s)"); ClientsChanged?.Invoke(); };
+        var buttonState = _buttonState; // capturé : StopAsync remet le champ à null pendant que l'événement peut encore arriver
+        buttonState.SubscribedClientsChanged += (_, _) =>
+        {
+            try { Log?.Invoke($"OBC BLE : {buttonState.SubscribedClients.Count} abonné(s)"); } catch { /* service arrêté */ }
+            ClientsChanged?.Invoke();
+        };
         haptic.WriteRequested += OnHapticWrite;
         appInfo.WriteRequested += OnAppInfoWrite;
 
@@ -81,6 +86,11 @@ public sealed class ObcBlePeripheral : IObcTransport
         }
 
         var adv = new GattServiceProviderAdvertisingParameters { IsDiscoverable = true, IsConnectable = true };
+        _obc.AdvertisementStatusChanged += (_, e) =>
+        {
+            if (e.Status is GattServiceProviderAdvertisementStatus.Aborted)
+                Log?.Invoke($"OBC BLE : annonce interrompue par Windows ({e.Error}).");
+        };
         _obc.StartAdvertising(adv);
         _battery?.StartAdvertising(adv);
         // GattServiceProvider ne permet pas de choisir le nom annoncé : c'est le nom Bluetooth du PC, c'est-à-dire son nom d'hôte.
@@ -100,7 +110,7 @@ public sealed class ObcBlePeripheral : IObcTransport
         try { _obc?.StopAdvertising(); } catch { }
         try { _battery?.StopAdvertising(); } catch { }
         _obc = null; _battery = null; _buttonState = null; _batteryLevel = null;
-        _parsers.Clear();
+        _appInfo.Clear();
         CurrentAppInfo = null;
         AdvertisedName = null;
         ClientsChanged?.Invoke();
@@ -123,14 +133,18 @@ public sealed class ObcBlePeripheral : IObcTransport
             _ = _batteryLevel.NotifyValueAsync(CryptographicBuffer.CreateFromByteArray([_batteryValue]));
     }
 
+    // Les quatre gestionnaires sont « async void » (imposé par WinRT) : aucune exception ne doit en sortir, sinon l'appli plante.
+    // GetRequestAsync renvoie null quand Windows refuse l'accès au client : on ignore alors la requête.
+
     private async void OnButtonStateRead(GattLocalCharacteristic sender, GattReadRequestedEventArgs args)
     {
         var d = args.GetDeferral();
         try
         {
             var req = await args.GetRequestAsync();
-            req.RespondWithValue(CryptographicBuffer.CreateFromByteArray(_lastButtonState));
+            req?.RespondWithValue(CryptographicBuffer.CreateFromByteArray(_lastButtonState));
         }
+        catch (Exception ex) { Log?.Invoke($"OBC BLE : lecture de l'état des boutons échouée ({ex.Message})"); }
         finally { d.Complete(); }
     }
 
@@ -140,8 +154,9 @@ public sealed class ObcBlePeripheral : IObcTransport
         try
         {
             var req = await args.GetRequestAsync();
-            req.RespondWithValue(CryptographicBuffer.CreateFromByteArray([_batteryValue]));
+            req?.RespondWithValue(CryptographicBuffer.CreateFromByteArray([_batteryValue]));
         }
+        catch (Exception ex) { Log?.Invoke($"OBC BLE : lecture de la batterie échouée ({ex.Message})"); }
         finally { d.Complete(); }
     }
 
@@ -151,10 +166,12 @@ public sealed class ObcBlePeripheral : IObcTransport
         try
         {
             var req = await args.GetRequestAsync();
+            if (req is null) return;
             CryptographicBuffer.CopyToByteArray(req.Value, out byte[] data);
             if (req.Option == GattWriteOption.WriteWithResponse) req.Respond();
             if (ObcMessages.TryDecodeHaptic(data, out var h)) HapticReceived?.Invoke(h);
         }
+        catch (Exception ex) { Log?.Invoke($"OBC BLE : écriture Haptic échouée ({ex.Message})"); }
         finally { d.Complete(); }
     }
 
@@ -164,22 +181,19 @@ public sealed class ObcBlePeripheral : IObcTransport
         try
         {
             var req = await args.GetRequestAsync();
+            if (req is null) return;
             CryptographicBuffer.CopyToByteArray(req.Value, out byte[] data);
             if (req.Option == GattWriteOption.WriteWithResponse) req.Respond();
 
             // App Info dépasse souvent la MTU par défaut : on réassemble les écritures successives par session.
-            string key = args.Session.DeviceId.Id;
-            if (!_parsers.TryGetValue(key, out var parser)) _parsers[key] = parser = new ObcStreamParser();
-            foreach (var msg in parser.Feed(data))
+            foreach (var info in _appInfo.Feed(args.Session.DeviceId.Id, data ?? [], Environment.TickCount64))
             {
-                if (ObcMessages.TryDecodeAppInfo(msg, out var info) && info is not null)
-                {
-                    CurrentAppInfo = info;
-                    Log?.Invoke($"App Info : {info.AppId} {info.AppVersion}");
-                    AppInfoReceived?.Invoke(info);
-                }
+                CurrentAppInfo = info;
+                Log?.Invoke($"App Info : {info.AppId} {info.AppVersion}");
+                AppInfoReceived?.Invoke(info);
             }
         }
+        catch (Exception ex) { Log?.Invoke($"OBC BLE : écriture App Info échouée ({ex.Message})"); }
         finally { d.Complete(); }
     }
 

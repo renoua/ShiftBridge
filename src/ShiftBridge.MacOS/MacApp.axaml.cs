@@ -60,9 +60,11 @@ public sealed class MacApp : Application
                 platform.StateChanged -= OnBluetoothStateChanged;
                 try
                 {
-                    await startup;
-                    await model.StopAsync();
+                    // Même borne que sous Windows et Android : une liaison Bluetooth bloquée ne doit pas empêcher de quitter.
+                    await startup.WaitAsync(TimeSpan.FromSeconds(5));
+                    await model.StopAsync().WaitAsync(TimeSpan.FromSeconds(5));
                 }
+                catch (TimeoutException) { /* on quitte quand même */ }
                 finally
                 {
                     await platform.DisposeAsync();

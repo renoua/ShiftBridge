@@ -23,7 +23,7 @@ internal sealed class WinBleScanner : IBleScanner
             if (_watcher is { Status: BluetoothLEAdvertisementWatcherStatus.Started or BluetoothLEAdvertisementWatcherStatus.Created }) return;
             var w = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
             w.Received += OnReceived;
-            w.Stopped += (_, e) => Stopped?.Invoke(e.Error.ToString());
+            w.Stopped += OnStopped;
             _watcher = w;
             w.Start();
         }
@@ -35,9 +35,26 @@ internal sealed class WinBleScanner : IBleScanner
         {
             if (_watcher is null) return;
             _watcher.Received -= OnReceived;
+            _watcher.Stopped -= OnStopped; // arrêt demandé : son événement (asynchrone) ne doit pas être pris pour une panne
             try { _watcher.Stop(); } catch { /* déjà arrêté */ }
             _watcher = null;
         }
+    }
+
+    /// <summary>
+    /// Arrêt venu de Windows. L'événement d'un ANCIEN watcher (arrivé après qu'un nouveau a démarré) est ignoré : il faisait
+    /// croire au hub que le scan en cours était arrêté.
+    /// </summary>
+    private void OnStopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs e)
+    {
+        lock (_lock)
+        {
+            if (!ReferenceEquals(sender, _watcher)) return;
+            sender.Received -= OnReceived;
+            sender.Stopped -= OnStopped;
+            _watcher = null; // le prochain Start recrée un watcher
+        }
+        Stopped?.Invoke(e.Error.ToString());
     }
 
     private void OnReceived(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
